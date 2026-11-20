@@ -1,0 +1,15 @@
+====================================================================================================
+[A4-MY] Tạo bảng giữa giao dịch tăng giá 10% rồi ROLLBACK (MySQL)
+Giả thuyết: CREATE TABLE gây implicit commit: lệnh tăng giá trước đó đã được commit, ROLLBACK không còn tác dụng.
+[t=  0.66s] A | START TRANSACTION
+[t=  0.66s] A | => 0 row(s) affected
+[t=  0.66s] A | UPDATE product_variants SET price = price * 1.10 WHERE id IN (101, 102)
+[t=  0.67s] A | => 2 row(s) affected
+[t=  0.67s] A | CREATE TABLE price_audit (id INT PRIMARY KEY, note VARCHAR(100))
+[t=  0.67s] A | => 0 row(s) affected
+[t=  0.67s] A | ROLLBACK
+[t=  0.67s] A | => 0 row(s) affected
+  [KHỚP ] Giá 101 / 102 sau ROLLBACK: quan sát = [528000000, 682000000] | kỳ vọng [528000000, 682000000] (giá mới đã bị commit ngầm)
+  [KHỚP ] Bảng price_audit tồn tại: quan sát = 1 | kỳ vọng 1
+
+  => PASS (2/2 kiểm tra khớp, 0.69s)

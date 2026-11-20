@@ -1,0 +1,74 @@
+# Môi trường demo Topic 4 – Transaction: MySQL 8.4.2 (InnoDB) và MongoDB 8.0.23 (replica set 3 node).
+#   docker compose up -d --build          # lần đầu build ~3-5 phút
+#   docker compose exec lab python run.py --list
+# Xem README.md để biết cách chạy từng test.
+
+name: topic-4-transaction
+
+services:
+  mysql:
+    build:
+      context: .
+      dockerfile: docker/mysql/Dockerfile
+      args:
+        MYSQL_VERSION: ${MYSQL_VERSION:-8.4.2}
+    container_name: tx-mysql          # C1 dùng tên này để kill -9 / khởi động lại
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "127.0.0.1:${MYSQL_HOST_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - mysql-log:/var/log/mysql      # error log, lab đọc để trích nhật ký khôi phục ở C1
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+      start_period: 20s
+
+  lab:
+    # 3 node mongod (replica set rs0) + Python chạy bộ test, trong cùng một container
+    # giống môi trường đo của báo cáo (3 node trên một máy, C1 kill -9 PRIMARY bằng pgrep).
+    build:
+      context: .
+      dockerfile: docker/lab/Dockerfile
+      args:
+        MONGO_VERSION: ${MONGO_VERSION:-8.0.23}
+    container_name: tx-lab
+    init: true
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_USER: demo
+      MYSQL_PASSWORD: demo123
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_CLI: mysql                                  # đọc host/user/password từ /root/.my.cnf
+      MYSQL_ERROR_LOG: /var/log/mysql/error.log
+      MYSQL_KILL_CMD: docker kill --signal=KILL tx-mysql
+      MYSQL_START_CMD: docker start tx-mysql
+      MONGO_URI: mongodb://127.0.0.1:27017,127.0.0.1:27018,127.0.0.1:27019/?replicaSet=rs0
+      MONGOD_BIN: mongod
+      MONGO_DATA: /data/rs
+      MONGO_BIND_IP: 0.0.0.0
+    ports:
+      - "127.0.0.1:27017:27017"
+      - "127.0.0.1:27018:27018"
+      - "127.0.0.1:27019:27019"
+    volumes:
+      - ./:/app                                         # kết quả ghi thẳng ra thư mục results/ trên máy
+      - mysql-log:/var/log/mysql:ro
+      - /var/run/docker.sock:/var/run/docker.sock       # chỉ C1-MySQL cần (docker kill / docker start tx-mysql)
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --port 27017 --eval 'quit(db.hello().isWritablePrimary ? 0 : 1)'"]
+      interval: 3s
+      timeout: 10s
+      retries: 60
+      start_period: 20s
+
+volumes:
+  mysql-data:
+  mysql-log:

@@ -1,0 +1,16 @@
+====================================================================================================
+[A2-MG] Lỗi giữa giao dịch nhưng ứng dụng vẫn commit (MongoDB)
+Giả thuyết: Lỗi của một thao tác làm server hủy cả transaction; lệnh sau và commit đều báo NoSuchTransaction (251).
+[t=  0.26s] A | session.startTransaction({ readConcern: "snapshot", writeConcern: { w: "majority" } })
+[t=  0.26s] A | orders.insertOne({ customer_id: 2, total: 580000000, items: [...] })
+[t=  0.26s] A | => inserted 6af20dade0ce49ccc3116d8e
+[t=  0.26s] A | inventory.updateOne({ _id: "401:1" }, { $inc: { qty_reserved: 2 } })
+[t=  0.26s] A | => ERROR 121 Document failed validation
+[t=  0.26s] A | orders.updateOne({ customer_id: 2 }, { $push: { payments: { type: "deposit", amount: 290000000 } } })
+[t=  0.27s] A | => ERROR 251 NoSuchTransaction ['TransientTransactionError']
+[t=  0.27s] A | session.commitTransaction()
+[t=  0.27s] A | => ERROR 251 NoSuchTransaction ['TransientTransactionError']
+  [KHỚP ] Mã lỗi: giữ chỗ / lệnh tiếp theo / commit: quan sát = [121, 251, 251] | kỳ vọng [121, 251, 251]
+  [KHỚP ] Số document orders: quan sát = 1 | kỳ vọng 1 (không có đơn ma)
+
+  => PASS (2/2 kiểm tra khớp, 0.27s)

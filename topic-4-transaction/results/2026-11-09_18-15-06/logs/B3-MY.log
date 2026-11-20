@@ -1,0 +1,90 @@
+====================================================================================================
+[B3-MY] Hai sales cùng giữ chỗ sofa Lawson 240 ở Kho Bình Dương (lost update) (MySQL)
+Giả thuyết: REPEATABLE READ không chặn lost update kiểu đọc rồi ghi (kết quả 1 thay vì 2). FOR UPDATE, cột version của app và cập nhật có điều kiện đều cho kết quả đúng, nhưng version của app từ chối lượt đến sau.
+
+  >> Đối chứng: đọc rồi ghi giá trị tự tính (REPEATABLE READ)
+[t=  0.70s] A | START TRANSACTION
+[t=  0.70s] A | => 0 row(s) affected
+[t=  0.70s]     B | START TRANSACTION
+[t=  0.70s]     B | => 0 row(s) affected
+[t=  0.70s] A | SELECT qty_reserved, version FROM inventory WHERE variant_id = 101 AND location_id = 3
+[t=  0.70s] A | => qty_reserved=0, version=0
+[t=  0.70s]     B | SELECT qty_reserved, version FROM inventory WHERE variant_id = 101 AND location_id = 3
+[t=  0.70s]     B | => qty_reserved=0, version=0
+[t=  0.70s] A | UPDATE inventory SET qty_reserved = %s WHERE variant_id = 101 AND location_id = 3   -- tham số (1,)
+[t=  0.70s] A | => 1 row(s) affected
+[t=  0.70s] A | COMMIT
+[t=  0.70s] A | => 0 row(s) affected
+[t=  0.70s]     B | UPDATE inventory SET qty_reserved = %s WHERE variant_id = 101 AND location_id = 3   -- tham số (1,)
+[t=  0.70s]     B | => 0 row(s) affected
+[t=  0.70s]     B | COMMIT
+[t=  0.70s]     B | => 0 row(s) affected
+  [KHỚP ] Đối chứng: giữ chỗ cuối cùng: quan sát = 1 | kỳ vọng 1 (lost update: đúng ra phải là 2)
+
+  >> Cách 1: khóa bi quan SELECT ... FOR UPDATE
+[t=  1.40s] A | START TRANSACTION
+[t=  1.40s] A | => 0 row(s) affected
+[t=  1.40s]     B | START TRANSACTION
+[t=  1.40s]     B | => 0 row(s) affected
+[t=  1.40s] A | SELECT qty_reserved, version FROM inventory WHERE variant_id = 101 AND location_id = 3 FOR UPDATE
+[t=  1.40s] A | => qty_reserved=0, version=0
+[t=  1.40s]     B | SELECT qty_reserved, version FROM inventory WHERE variant_id = 101 AND location_id = 3 FOR UPDATE (đang chờ...)
+[t=  2.90s] A | UPDATE inventory SET qty_reserved = %s, version = version + 1 WHERE variant_id = 101 AND location_id = 3   -- tham số (1,)
+[t=  2.90s] A | => 1 row(s) affected
+[t=  2.90s] A | COMMIT
+[t=  2.91s] A | => 0 row(s) affected
+[t=  2.91s]     B | => qty_reserved=1, version=1 (sau khi chờ 1.50s)
+[t=  2.91s]     B | UPDATE inventory SET qty_reserved = %s, version = version + 1 WHERE variant_id = 101 AND location_id = 3   -- tham số (2,)
+[t=  2.91s]     B | => 1 row(s) affected
+[t=  2.91s]     B | COMMIT
+[t=  2.91s]     B | => 0 row(s) affected
+  [KHỚP ] Cách 1: thời gian B chờ khóa (s): quan sát = 1.5 | kỳ vọng ≥ 1,4 (A giữ khóa 1,5 s)
+  [KHỚP ] Cách 1: giữ chỗ cuối cùng: quan sát = 2 | kỳ vọng 2
+
+  >> Cách 2: optimistic locking bằng cột version, đúng câu lệnh của inventory.repository.ts
+[t=  3.66s] A | START TRANSACTION
+[t=  3.66s] A | => 0 row(s) affected
+[t=  3.66s]     B | START TRANSACTION
+[t=  3.66s]     B | => 0 row(s) affected
+[t=  3.66s] A | SELECT qty_reserved, version FROM inventory WHERE variant_id = 101 AND location_id = 3
+[t=  3.66s] A | => qty_reserved=0, version=0
+[t=  3.66s]     B | SELECT qty_reserved, version FROM inventory WHERE variant_id = 101 AND location_id = 3
+[t=  3.66s]     B | => qty_reserved=0, version=0
+[t=  3.66s] A | UPDATE inventory SET qty_reserved = qty_reserved + 1, version = version + 1 WHERE variant_id = 101 AND location_id = 3 AND version = %s AND (qty_on_hand - qty_reserved) >= 1   -- tham số (0,)
+[t=  3.66s] A | => 1 row(s) affected
+[t=  3.66s]     B | UPDATE inventory SET qty_reserved = qty_reserved + 1, version = version + 1 WHERE variant_id = 101 AND location_id = 3 AND version = 0 AND (qty_on_hand - qty_reserved) >= 1 (đang chờ...)
+[t=  4.67s] A | COMMIT
+[t=  4.67s] A | => 0 row(s) affected
+[t=  4.67s]     B | => 0 row(s) affected (sau khi chờ 1.00s)
+[t=  4.67s]     B | ROLLBACK
+[t=  4.67s]     B | => 0 row(s) affected
+[t=  4.67s]     B | => app báo VERSION_CONFLICT cho khách (không tự thử lại)
+  -- Thử lại bằng một transaction mới
+[t=  4.68s]     B | START TRANSACTION
+[t=  4.68s]     B | => 0 row(s) affected
+[t=  4.68s]     B | SELECT qty_reserved, version FROM inventory WHERE variant_id = 101 AND location_id = 3
+[t=  4.68s]     B | => qty_reserved=1, version=1
+[t=  4.68s]     B | UPDATE inventory SET qty_reserved = qty_reserved + 1, version = version + 1 WHERE variant_id = 101 AND location_id = 3 AND version = %s AND (qty_on_hand - qty_reserved) >= 1   -- tham số (1,)
+[t=  4.68s]     B | => 1 row(s) affected
+[t=  4.68s]     B | COMMIT
+[t=  4.68s]     B | => 0 row(s) affected
+  [KHỚP ] Cách 2: số dòng B cập nhật được ở lần đầu: quan sát = 0 | kỳ vọng 0 (version đã đổi từ 0 thành 1)
+  [KHỚP ] Cách 2: giữ chỗ sau xung đột / sau khi thử lại: quan sát = [1, 2] | kỳ vọng [1, 2] (không mất cập nhật, nhưng lượt đến sau bị từ chối nếu không thử lại)
+
+  >> Cách 3: cập nhật có điều kiện còn hàng, không đọc trước
+[t=  5.43s] A | START TRANSACTION
+[t=  5.43s] A | => 0 row(s) affected
+[t=  5.43s]     B | START TRANSACTION
+[t=  5.43s]     B | => 0 row(s) affected
+[t=  5.43s] A | UPDATE inventory SET qty_reserved = qty_reserved + 1, version = version + 1 WHERE variant_id = 101 AND location_id = 3 AND (qty_on_hand - qty_reserved) >= 1
+[t=  5.43s] A | => 1 row(s) affected
+[t=  5.43s]     B | UPDATE inventory SET qty_reserved = qty_reserved + 1, version = version + 1 WHERE variant_id = 101 AND location_id = 3 AND (qty_on_hand - qty_reserved) >= 1 (đang chờ...)
+[t=  6.43s] A | COMMIT
+[t=  6.44s] A | => 0 row(s) affected
+[t=  6.44s]     B | => 1 row(s) affected (sau khi chờ 1.00s)
+[t=  6.44s]     B | COMMIT
+[t=  6.44s]     B | => 0 row(s) affected
+  [KHỚP ] Cách 3: B chờ rồi cập nhật được (dòng): quan sát = 1 | kỳ vọng 1
+  [KHỚP ] Cách 3: giữ chỗ cuối cùng: quan sát = 2 | kỳ vọng 2
+
+  => PASS (7/7 kiểm tra khớp, 6.45s)

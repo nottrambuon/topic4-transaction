@@ -1,0 +1,24 @@
+====================================================================================================
+[B2-MG] Báo cáo tồn Kho Bình Dương trong lúc có đổi giá và nhập kho (MongoDB)
+Giả thuyết: Transaction snapshot không thấy thay đổi đã commit sau khi nó bắt đầu đọc; sau commit mới thấy.
+[t=  0.25s] A | session.startTransaction({ readConcern: "snapshot", writeConcern: { w: "majority" } })
+[t=  0.25s] A | variants.findOne({ _id: 101 }).price (triệu)
+[t=  0.25s] A | => 480
+[t=  0.25s] A | inventory.aggregate([{ $match: { location_id: 3 } }, { $group: số mã, tổng tồn }])
+[t=  0.25s] A | => [3, 13]
+[t=  0.25s]     B | variants.updateOne({ _id: 101 }, { $set: { price: 520000000 } })
+[t=  0.26s]     B | => matched 1, modified 1
+[t=  0.26s]     B | inventory.insertOne({ _id: "301:3", qty_on_hand: 1 })
+[t=  0.26s]     B | => inserted 301:3
+[t=  0.26s] A | variants.findOne({ _id: 101 }).price (triệu)
+[t=  0.26s] A | => 480
+[t=  0.26s] A | inventory.aggregate(...)
+[t=  0.26s] A | => [3, 13]
+[t=  0.26s] A | session.commitTransaction()
+[t=  0.26s] A | => commit OK
+[t=  0.26s] A | inventory.aggregate(...) sau commit
+[t=  0.26s] A | => [4, 14]
+  [KHỚP ] Trong transaction [giá lần 1, lần 2, (số mã, tổng tồn) lần 1, lần 2]: quan sát = [480, 480, [3, 13], [3, 13]] | kỳ vọng [480, 480, [3, 13], [3, 13]]
+  [KHỚP ] Sau commit (số mã, tổng tồn): quan sát = [4, 14] | kỳ vọng [4, 14]
+
+  => PASS (2/2 kiểm tra khớp, 0.26s)

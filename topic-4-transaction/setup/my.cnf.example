@@ -1,0 +1,18 @@
+# Chỉ dùng khi chạy KHÔNG qua Docker: cấu hình mysqld 8.4 đã dùng cho lần đo trong báo cáo.
+# Thay <HOME> bằng thư mục của bạn. Docker dùng docker/mysql/transaction.cnf thay cho file này.
+[mysqld]
+basedir=<HOME>/env/my84
+datadir=<HOME>/srv/mysql-data
+socket=<HOME>/srv/mysql.sock
+port=3306
+bind-address=127.0.0.1
+log-error=<HOME>/srv/mysql-error.log
+pid-file=<HOME>/srv/mysqld.pid
+log-bin=<HOME>/srv/mysql-data/binlog
+server-id=1
+mysqlx=OFF
+log_error_verbosity=3
+
+[client]
+socket=<HOME>/srv/mysql.sock
+user=root

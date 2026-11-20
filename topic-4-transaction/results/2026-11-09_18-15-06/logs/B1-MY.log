@@ -1,0 +1,35 @@
+====================================================================================================
+[B1-MY] Tra cứu bàn Venice còn bán khi phiên kia đang giữ chỗ rồi hủy (dirty read) (MySQL)
+Giả thuyết: READ UNCOMMITTED đọc được giữ chỗ chưa commit (0 rồi 1); READ COMMITTED không (1 và 1).
+
+  >> Phiên B ở mức READ UNCOMMITTED
+[t=  0.69s]     B | SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED
+[t=  0.69s]     B | => 0 row(s) affected
+[t=  0.69s] A | START TRANSACTION
+[t=  0.69s] A | => 0 row(s) affected
+[t=  0.69s] A | UPDATE inventory SET qty_reserved = qty_reserved + 1, version = version + 1 WHERE variant_id = 401 AND location_id = 1
+[t=  0.69s] A | => 1 row(s) affected
+[t=  0.69s]     B | SELECT qty_on_hand - qty_reserved AS con_ban FROM inventory WHERE variant_id = 401 AND location_id = 1
+[t=  0.69s]     B | => con_ban=0
+[t=  0.69s] A | ROLLBACK
+[t=  0.69s] A | => 0 row(s) affected
+[t=  0.69s]     B | SELECT qty_on_hand - qty_reserved AS con_ban FROM inventory WHERE variant_id = 401 AND location_id = 1
+[t=  0.69s]     B | => con_ban=1
+
+  >> Phiên B ở mức READ COMMITTED
+[t=  1.41s]     B | SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED
+[t=  1.41s]     B | => 0 row(s) affected
+[t=  1.41s] A | START TRANSACTION
+[t=  1.42s] A | => 0 row(s) affected
+[t=  1.42s] A | UPDATE inventory SET qty_reserved = qty_reserved + 1, version = version + 1 WHERE variant_id = 401 AND location_id = 1
+[t=  1.42s] A | => 1 row(s) affected
+[t=  1.42s]     B | SELECT qty_on_hand - qty_reserved AS con_ban FROM inventory WHERE variant_id = 401 AND location_id = 1
+[t=  1.42s]     B | => con_ban=1
+[t=  1.42s] A | ROLLBACK
+[t=  1.42s] A | => 0 row(s) affected
+[t=  1.42s]     B | SELECT qty_on_hand - qty_reserved AS con_ban FROM inventory WHERE variant_id = 401 AND location_id = 1
+[t=  1.42s]     B | => con_ban=1
+  [KHỚP ] READ UNCOMMITTED: số bàn còn bán [trước, sau khi A hủy]: quan sát = [0, 1] | kỳ vọng [0, 1] (dirty read: thấy chiếc bàn đã hết dù giao dịch của A chưa commit)
+  [KHỚP ] READ COMMITTED: số bàn còn bán [trước, sau khi A hủy]: quan sát = [1, 1] | kỳ vọng [1, 1]
+
+  => PASS (2/2 kiểm tra khớp, 1.42s)

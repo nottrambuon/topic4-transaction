@@ -1,0 +1,32 @@
+====================================================================================================
+[A3-MY] Đổi kho xuất cho riêng một dòng hàng bằng SAVEPOINT (MySQL)
+Giả thuyết: ROLLBACK TO SAVEPOINT hủy riêng phần sau điểm đánh dấu, giữ lượt giữ chỗ sofa hợp lệ.
+[t=  0.62s] A | START TRANSACTION
+[t=  0.62s] A | => 0 row(s) affected
+[t=  0.62s] A | INSERT INTO orders (customer_id, subtotal, discount, total, shipping_address) VALUES (3, 1060000000, 0, 1060000000, '88 Võ Văn Tần')
+[t=  0.62s] A | => 1 row(s) affected
+[t=  0.62s] A | SET @oid = LAST_INSERT_ID()
+[t=  0.62s] A | => 0 row(s) affected
+[t=  0.62s] A | INSERT INTO order_items (order_id, variant_id, location_id, quantity, unit_price) VALUES (@oid, 101, 1, 1, 480000000)
+[t=  0.62s] A | => 1 row(s) affected
+[t=  0.62s] A | UPDATE inventory SET qty_reserved = qty_reserved + 1, version = version + 1 WHERE variant_id = 101 AND location_id = 1
+[t=  0.62s] A | => 1 row(s) affected
+[t=  0.62s] A | SAVEPOINT sp_line2
+[t=  0.62s] A | => 0 row(s) affected
+[t=  0.62s] A | INSERT INTO order_items (order_id, variant_id, location_id, quantity, unit_price) VALUES (@oid, 401, 1, 2, 290000000)
+[t=  0.62s] A | => 1 row(s) affected
+[t=  0.62s] A | UPDATE inventory SET qty_reserved = qty_reserved + 2, version = version + 1 WHERE variant_id = 401 AND location_id = 1
+[t=  0.62s] A | => ERROR 3819: Check constraint 'chk_inventory_reserved_le_on_hand' is violated.
+  [KHỚP ] Giữ 2 bàn Venice tại Q1: quan sát = 3819 | kỳ vọng 3819
+[t=  0.62s] A | ROLLBACK TO SAVEPOINT sp_line2
+[t=  0.62s] A | => 0 row(s) affected
+[t=  0.62s] A | INSERT INTO order_items (order_id, variant_id, location_id, quantity, unit_price) VALUES (@oid, 401, 3, 2, 290000000)
+[t=  0.62s] A | => 1 row(s) affected
+[t=  0.62s] A | UPDATE inventory SET qty_reserved = qty_reserved + 2, version = version + 1 WHERE variant_id = 401 AND location_id = 3
+[t=  0.63s] A | => 1 row(s) affected
+[t=  0.63s] A | COMMIT
+[t=  0.63s] A | => 0 row(s) affected
+  [KHỚP ] Dòng hàng của đơn mới [biến thể, địa điểm, số lượng]: quan sát = [[101, 1, 1], [401, 3, 2]] | kỳ vọng [[101, 1, 1], [401, 3, 2]]
+  [KHỚP ] Giữ chỗ 101@Q1 / 401@Q1 / 401@Kho BD: quan sát = [1, 0, 2] | kỳ vọng [1, 0, 2]
+
+  => PASS (3/3 kiểm tra khớp, 0.66s)

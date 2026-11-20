@@ -1,0 +1,42 @@
+====================================================================================================
+[C1-MG] Kill -9 PRIMARY khi giao dịch Bàn giao đã commit (w: majority) và một đơn khác còn dở dang (MongoDB)
+Giả thuyết: Replica set bầu PRIMARY mới; giao dịch đã commit với w: majority còn nguyên; giao dịch dở dang bị hủy; node bị kill tự khôi phục từ checkpoint và journal khi khởi động lại.
+
+  >> A: giao dịch Bàn giao đơn #1, commit với w: majority
+[t=  0.26s] A | session.startTransaction({ readConcern: "snapshot", writeConcern: { w: "majority" } })
+[t=  0.26s] A | deliverOrder(1): orders, inventory, edition_units, customers
+[t=  0.26s] A | => ok
+[t=  0.26s] A | session.commitTransaction()
+[t=  0.27s] A | => commit OK
+
+  >> B: đơn bàn Venice của Chi, chưa commit
+[t=  0.27s]     B | session.startTransaction({ readConcern: "snapshot", writeConcern: { w: "majority" } })
+[t=  0.27s]     B | placeOrder(customer 3, [{401, Q1, 1}])
+[t=  0.27s]     B | => 6af20ddae0ce49ccc3116d96
+
+  >> Sự cố
+[t=  0.27s] - | $ kill -9 <mongod PRIMARY cổng 27017>
+[t= 10.78s] - | => PRIMARY mới là cổng 27018, ghi được sau 10.5s
+[t= 10.78s]     B | session.commitTransaction()
+[t= 10.78s]     B | => ERROR 251 NoSuchTransaction ['TransientTransactionError']
+  [KHỚP ] Bàn giao đã commit: [trạng thái đơn, tồn / giữ chỗ 102@Kho BD, total_spent của An]: quan sát = ['delivered', [2, 0], 1009000000] | kỳ vọng ['delivered', [2, 0], 1009000000]
+  [KHỚP ] Commit của B sau failover thất bại: quan sát = True | kỳ vọng True
+  [KHỚP ] Đơn dở dang của Chi: [số đơn, giữ chỗ 401@Q1]: quan sát = [0, 0] | kỳ vọng [0, 0]
+  [KHỚP ] Thời gian đến khi ghi được trên PRIMARY mới (s): quan sát = 10.5 | kỳ vọng ≤ 20
+
+  >> Khởi động lại node bị kill
+[t= 11.34s] - | => node cổng 27017 trở lại, trạng thái SECONDARY
+  -- Nhật ký khôi phục của node bị kill (trích):
+[t= 11.34s] - | Recovering data from the last clean checkpoint.
+[t= 11.34s] - | Recovering log 3 through 4
+[t= 11.34s] - | Recovering log 4 through 4
+[t= 11.34s] - | Main recovery loop: starting at 3/1094528 to 4/256
+[t= 11.34s] - | recovery log replay has successfully finished and ran for 214 milliseconds
+[t= 11.34s] - | Set global recovery timestamp: (1794248138, 31)
+[t= 11.34s] - | recovery rollback to stable has successfully finished and ran for 10 milliseconds
+[t= 11.34s] - | recovery checkpoint has successfully finished and ran for 22 milliseconds
+[t= 11.34s] - | recovery was completed successfully and took 248ms, including 214ms for the log replay, 10ms for the rollback to stable, and 22ms for the checkpoint.
+[t= 11.34s] - | Completed oplog application for recovery (numOpsApplied=48)
+  [KHỚP ] Node bị kill trở lại replica set: quan sát = True | kỳ vọng True
+
+  => PASS (5/5 kiểm tra khớp, 23.36s)

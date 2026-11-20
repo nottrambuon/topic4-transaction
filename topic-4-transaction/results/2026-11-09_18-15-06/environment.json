@@ -1,0 +1,35 @@
+{
+  "time": "2026-11-09T18:15:06",
+  "python": "3.13.18",
+  "os": "Linux-6.18.44-fc-v310-x86_64-with-glibc2.39",
+  "cpu_count": 2,
+  "ram_gb": 7.8,
+  "mysql": {
+    "version": "8.4.2",
+    "isolation": "REPEATABLE-READ",
+    "flush_log_at_trx_commit": "1",
+    "sync_binlog": "1",
+    "log_bin": "1",
+    "lock_wait_timeout": "50",
+    "deadlock_detect": "1"
+  },
+  "mongodb": {
+    "version": "8.0.23",
+    "replica_set": "rs0",
+    "members": [
+      "127.0.0.1:27017 PRIMARY",
+      "127.0.0.1:27018 SECONDARY",
+      "127.0.0.1:27019 SECONDARY"
+    ],
+    "transactionLifetimeLimitSeconds": 60,
+    "maxTransactionLockRequestTimeoutMillis": 5,
+    "defaultWriteConcern": {
+      "w": "majority",
+      "wtimeout": 0
+    }
+  },
+  "drivers": {
+    "pymysql": "2.2.8",
+    "pymongo": "4.19.0"
+  }
+}

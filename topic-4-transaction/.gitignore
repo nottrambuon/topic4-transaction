@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+data/
+env.sh
+.env
+# Mỗi lần chạy tạo results/<thời điểm>/ và results/latest/; chỉ giữ lần chạy dùng cho báo cáo
+results/*
+!results/2026-11-09_18-15-06/

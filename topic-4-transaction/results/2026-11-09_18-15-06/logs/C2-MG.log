@@ -1,0 +1,32 @@
+====================================================================================================
+[C2-MG] Thông lượng giao dịch Đặt hàng tuần tự theo write concern và có / không transaction (MongoDB)
+Giả thuyết: H3: w: 1 nhanh hơn w: majority; H4: với w: majority, dùng transaction nhanh hơn không dùng (chỉ chờ nhân bản một lần lúc commit).
+[t=  6.97s] - | lần 1 | Transaction, w: majority                 |   157.2 đơn/s | 6.36 ms/đơn
+[t= 13.20s] - | lần 1 | Transaction, w: 1                        |   175.5 đơn/s | 5.70 ms/đơn
+[t= 23.36s] - | lần 1 | Không transaction, w: majority           |   106.5 đơn/s | 9.39 ms/đơn
+[t= 28.78s] - | lần 1 | Không transaction, w: 1                  |   207.7 đơn/s | 4.82 ms/đơn
+[t= 35.22s] - | lần 2 | Transaction, w: 1                        |   169.3 đơn/s | 5.91 ms/đơn
+[t= 45.14s] - | lần 2 | Không transaction, w: majority           |   107.9 đơn/s | 9.27 ms/đơn
+[t= 51.75s] - | lần 2 | Không transaction, w: 1                  |   168.0 đơn/s | 5.95 ms/đơn
+[t= 59.09s] - | lần 2 | Transaction, w: majority                 |   148.1 đơn/s | 6.75 ms/đơn
+[t= 69.25s] - | lần 3 | Không transaction, w: majority           |   106.5 đơn/s | 9.39 ms/đơn
+[t= 75.26s] - | lần 3 | Không transaction, w: 1                  |   188.9 đơn/s | 5.29 ms/đơn
+[t= 82.89s] - | lần 3 | Transaction, w: majority                 |   142.7 đơn/s | 7.01 ms/đơn
+[t= 89.20s] - | lần 3 | Transaction, w: 1                        |   175.6 đơn/s | 5.69 ms/đơn
+[t= 94.71s] - | lần 4 | Không transaction, w: 1                  |   205.3 đơn/s | 4.87 ms/đơn
+[t=102.61s] - | lần 4 | Transaction, w: majority                 |   138.6 đơn/s | 7.21 ms/đơn
+[t=109.20s] - | lần 4 | Transaction, w: 1                        |   165.2 đơn/s | 6.05 ms/đơn
+[t=119.27s] - | lần 4 | Không transaction, w: majority           |   107.1 đơn/s | 9.34 ms/đơn
+[t=126.55s] - | lần 5 | Transaction, w: majority                 |   150.9 đơn/s | 6.63 ms/đơn
+[t=132.53s] - | lần 5 | Transaction, w: 1                        |   183.2 đơn/s | 5.46 ms/đơn
+[t=142.28s] - | lần 5 | Không transaction, w: majority           |   110.6 đơn/s | 9.04 ms/đơn
+[t=148.23s] - | lần 5 | Không transaction, w: 1                  |   188.1 đơn/s | 5.32 ms/đơn
+[t=148.23s] - | TỔNG HỢP | Transaction, w: majority                 | trung vị 148.1 [138.6; 157.2] | CV 4.9%
+[t=148.23s] - | TỔNG HỢP | Transaction, w: 1                        | trung vị 175.5 [165.2; 183.2] | CV 4.0%
+[t=148.23s] - | TỔNG HỢP | Không transaction, w: majority           | trung vị 107.1 [106.5; 110.6] | CV 1.6%
+[t=148.23s] - | TỔNG HỢP | Không transaction, w: 1                  | trung vị 188.9 [168.0; 207.7] | CV 8.3%
+  [KHỚP ] Mọi lần đo đều đúng: quan sát = True | kỳ vọng True
+  [KHỚP ] H3: trung vị w:1 / w:majority (có transaction): quan sát = 1.19 | kỳ vọng > 1
+  [KHỚP ] H4: trung vị có / không transaction (w: majority): quan sát = 1.38 | kỳ vọng > 1
+
+  => PASS (3/3 kiểm tra khớp, 148.23s)

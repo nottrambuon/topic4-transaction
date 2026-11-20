@@ -1,0 +1,48 @@
+====================================================================================================
+[B4-MG] Hai yêu cầu lập lịch thanh toán cùng lúc cho đơn #1 (write skew) (MongoDB)
+Giả thuyết: Snapshot isolation để lọt write skew khi khoản thanh toán là document riêng; khi nhúng payments[] vào document đơn hàng (mô hình của nhóm), hai giao dịch ghi cùng một document nên WriteConflict chặn được.
+
+  >> Thiết kế chuẩn hóa: payments là collection riêng (như bảng SQL)
+[t=  0.28s] A | session.startTransaction({ readConcern: "snapshot", writeConcern: { w: "majority" } })
+[t=  0.28s]     B | session.startTransaction({ readConcern: "snapshot", writeConcern: { w: "majority" } })
+[t=  0.28s] A | payments.find({ order_id: 1 }) -> kiểm tra ràng buộc
+[t=  0.29s] A | => True
+[t=  0.29s]     B | payments.find({ order_id: 1 }) -> kiểm tra ràng buộc
+[t=  0.29s]     B | => True
+[t=  0.29s] A | payments.insertOne({ order_id: 1, type: "final", amount: 294500000 })
+[t=  0.29s] A | => inserted 6af20dc0e0ce49ccc3116d91
+[t=  0.29s]     B | payments.insertOne({ order_id: 1, type: "final", amount: 294500000 })
+[t=  0.29s]     B | => inserted 6af20dc0e0ce49ccc3116d92
+[t=  0.29s] A | session.commitTransaction()
+[t=  0.29s] A | => commit OK
+[t=  0.29s]     B | session.commitTransaction()
+[t=  0.29s]     B | => commit OK
+  [KHỚP ] Cả hai qua kiểm tra: quan sát = [True, True] | kỳ vọng [True, True]
+  [KHỚP ] Collection riêng: [số khoản final, tổng tiền]: quan sát = [2, 883500000] | kỳ vọng [2, 883500000] (write skew)
+
+  >> Thiết kế nhúng: payments[] nằm trong document đơn hàng
+[t=  0.55s] A | session.startTransaction({ readConcern: "snapshot", writeConcern: { w: "majority" } })
+[t=  0.55s]     B | session.startTransaction({ readConcern: "snapshot", writeConcern: { w: "majority" } })
+[t=  0.55s] A | orders.findOne({ _id: 1 }).payments -> kiểm tra ràng buộc
+[t=  0.55s] A | => True
+[t=  0.55s]     B | orders.findOne({ _id: 1 }).payments -> kiểm tra ràng buộc
+[t=  0.55s]     B | => True
+[t=  0.55s] A | orders.updateOne({ _id: 1 }, { $push: { payments: { type: "final", amount: 294500000 } } })
+[t=  0.55s] A | => matched 1, modified 1
+[t=  0.55s]     B | orders.updateOne({ _id: 1 }, { $push: { payments: { type: "final", amount: 294500000 } } })
+[t=  0.55s]     B | => ERROR 112 WriteConflict ['TransientTransactionError']
+[t=  0.55s]     B | session.abortTransaction()
+[t=  0.56s]     B | => abort OK
+[t=  0.56s] A | session.commitTransaction()
+[t=  0.56s] A | => commit OK
+  -- B chạy lại giao dịch
+[t=  0.56s]     B | session.startTransaction({ readConcern: "snapshot", writeConcern: { w: "majority" } })
+[t=  0.56s]     B | orders.findOne({ _id: 1 }).payments -> kiểm tra ràng buộc
+[t=  0.56s]     B | => False
+[t=  0.56s]     B | => kiểm tra ràng buộc thất bại: từ chối lập lịch
+[t=  0.56s]     B | session.commitTransaction()
+[t=  0.57s]     B | => commit OK
+  [KHỚP ] Nhúng: mã lỗi lượt ghi của B: quan sát = 112 | kỳ vọng 112
+  [KHỚP ] Nhúng: [số khoản final, tổng tiền]: quan sát = [1, 589000000] | kỳ vọng [1, 589000000]
+
+  => PASS (4/4 kiểm tra khớp, 0.57s)

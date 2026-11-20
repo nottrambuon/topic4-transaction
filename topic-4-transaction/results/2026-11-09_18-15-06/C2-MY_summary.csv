@@ -1,0 +1,4 @@
+config,n,median,min,max,stdev,cv_pct
+app_flush1,5,380.3,350.5,386.1,16.51,4.4
+app_flush2,5,604.9,590.2,631.6,16.32,2.7
+proc_flush1,5,631.5,580.8,665.3,34.52,5.6

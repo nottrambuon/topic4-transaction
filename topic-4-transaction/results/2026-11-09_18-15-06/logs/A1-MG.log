@@ -1,0 +1,31 @@
+====================================================================================================
+[A1-MG] Đặt 2 bàn Venice khi Showroom Q1 chỉ còn 1: abort hủy trọn giao dịch (MongoDB)
+Giả thuyết: Lỗi validator làm abort cả transaction; không dùng transaction thì document đơn hàng đã ghi vẫn còn (đơn ma).
+
+  >> Phần 1: có transaction
+[t=  0.28s] A | session.startTransaction({ readConcern: "snapshot", writeConcern: { w: "majority" } })
+[t=  0.28s] A | orders.insertOne({ customer_id: 2, items: [{ variant_id: 401, location_id: 1, quantity: 2 }], ... })
+[t=  0.28s] A | => inserted 6af20dace0ce49ccc3116d8b
+[t=  0.28s] A | inventory.updateOne({ _id: "401:1" }, { $inc: { qty_reserved: 2, version: 1 } })
+[t=  0.28s] A | => ERROR 121 Document failed validation
+  [KHỚP ] Mã lỗi khi giữ chỗ vượt tồn: quan sát = 121 | kỳ vọng 121 (validator của collection inventory)
+[t=  0.28s] A | session.abortTransaction()
+[t=  0.29s] A | => abort OK
+  [KHỚP ] Số document orders: quan sát = 1 | kỳ vọng 1
+  [KHỚP ] Giữ chỗ 401 @ Showroom Q1: quan sát = 0 | kỳ vọng 0
+
+  >> Phần 2: không dùng transaction (hai lệnh ghi độc lập)
+[t=  0.29s] A | orders.insertOne({ ... })
+[t=  0.29s] A | => inserted 6af20dace0ce49ccc3116d8c
+[t=  0.29s] A | inventory.updateOne({ _id: "401:1" }, { $inc: { qty_reserved: 2 } })
+[t=  0.30s] A | => ERROR 121 Document failed validation
+  [KHỚP ] Mã lỗi: quan sát = 121 | kỳ vọng 121
+  [KHỚP ] Số document orders: quan sát = 2 | kỳ vọng 2 (đơn ma: có đơn nhưng không giữ được hàng)
+
+  >> Phần 3: placeOrder như app trong withTransaction, đơn 2 dòng: sofa 101 @ Q1 + 2 bàn Venice @ Q1
+[t=  0.55s] A | withTransaction(placeOrder(...)) => lỗi ứng dụng OUT_OF_STOCK; driver abort transaction
+  [KHỚP ] Lỗi ứng dụng: quan sát = OUT_OF_STOCK | kỳ vọng OUT_OF_STOCK
+  [KHỚP ] Giữ chỗ sofa 101 @ Q1: quan sát = 0 | kỳ vọng 0 (abort hoàn tác lượt giữ chỗ của dòng 1)
+  [KHỚP ] Số document orders: quan sát = 1 | kỳ vọng 1
+
+  => PASS (8/8 kiểm tra khớp, 0.55s)

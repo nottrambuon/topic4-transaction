@@ -1,0 +1,18 @@
+====================================================================================================
+[B1-MG] Tra cứu bàn Venice còn bán khi phiên kia đang giữ chỗ rồi hủy (dirty read) (MongoDB)
+Giả thuyết: MongoDB không cho đọc thay đổi chưa commit, cả trong lẫn ngoài transaction.
+[t=  0.28s] A | session.startTransaction({ readConcern: "snapshot", writeConcern: { w: "majority" } })
+[t=  0.28s] A | inventory.updateOne({ _id: "401:1" }, { $inc: { qty_reserved: 1 } })
+[t=  0.29s] A | => matched 1, modified 1
+[t=  0.29s]     B | inventory.findOne({ _id: "401:1" }) -> còn bán (ngoài transaction)
+[t=  0.29s]     B | => 1
+[t=  0.29s]     B | session.startTransaction({ readConcern: "snapshot", writeConcern: { w: "majority" } })
+[t=  0.29s]     B | inventory.findOne({ _id: "401:1" }) -> còn bán (trong transaction)
+[t=  0.29s]     B | => 1
+[t=  0.29s]     B | session.commitTransaction()
+[t=  0.29s]     B | => commit OK
+[t=  0.29s] A | session.abortTransaction()
+[t=  0.29s] A | => abort OK
+  [KHỚP ] Số bàn còn bán [ngoài transaction, trong transaction]: quan sát = [1, 1] | kỳ vọng [1, 1]
+
+  => PASS (1/1 kiểm tra khớp, 0.29s)

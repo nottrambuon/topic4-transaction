@@ -1,0 +1,1459 @@
+{
+  "environment": {
+    "time": "2026-11-09T18:15:06",
+    "python": "3.13.18",
+    "os": "Linux-6.18.44-fc-v310-x86_64-with-glibc2.39",
+    "cpu_count": 2,
+    "ram_gb": 7.8,
+    "mysql": {
+      "version": "8.4.2",
+      "isolation": "REPEATABLE-READ",
+      "flush_log_at_trx_commit": "1",
+      "sync_binlog": "1",
+      "log_bin": "1",
+      "lock_wait_timeout": "50",
+      "deadlock_detect": "1"
+    },
+    "mongodb": {
+      "version": "8.0.23",
+      "replica_set": "rs0",
+      "members": [
+        "127.0.0.1:27017 PRIMARY",
+        "127.0.0.1:27018 SECONDARY",
+        "127.0.0.1:27019 SECONDARY"
+      ],
+      "transactionLifetimeLimitSeconds": 60,
+      "maxTransactionLockRequestTimeoutMillis": 5,
+      "defaultWriteConcern": {
+        "w": "majority",
+        "wtimeout": 0
+      }
+    },
+    "drivers": {
+      "pymysql": "2.2.8",
+      "pymongo": "4.19.0"
+    }
+  },
+  "options": {
+    "select": [],
+    "dbms": "both",
+    "allow_crash": true,
+    "reps": 5,
+    "orders": 1000,
+    "threads": 8,
+    "per_thread": 100,
+    "warmup": 50,
+    "quick": false,
+    "list": false
+  },
+  "cases": [
+    {
+      "key": "A1-MY",
+      "cid": "A1",
+      "dbms": "MySQL",
+      "title": "Đặt 2 bàn Venice khi Showroom Q1 chỉ còn 1: hủy trọn giao dịch ghi nhiều bảng",
+      "hypothesis": "ROLLBACK hủy mọi thay đổi của transaction (orders, order_items, inventory); AUTO_INCREMENT không được trả lại.",
+      "log": "logs/A1-MY.log",
+      "checks": [
+        {
+          "what": "Mã lỗi khi giữ chỗ vượt tồn",
+          "observed": 3819,
+          "expected": "3819",
+          "ok": true,
+          "why": "CHECK chk_inventory_reserved_le_on_hand"
+        },
+        {
+          "what": "Số đơn / dòng hàng / phiếu thanh toán sau ROLLBACK",
+          "observed": [
+            1,
+            1,
+            1
+          ],
+          "expected": "[1, 1, 1]",
+          "ok": true,
+          "why": "chỉ còn đơn #1 có sẵn trong dữ liệu mẫu"
+        },
+        {
+          "what": "Giữ chỗ 401 @ Showroom Q1",
+          "observed": 0,
+          "expected": "0",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "id của đơn kế tiếp",
+          "observed": 3,
+          "expected": "3",
+          "ok": true,
+          "why": "số 2 đã cấp cho giao dịch bị hủy không được trả lại"
+        },
+        {
+          "what": "Lỗi ứng dụng",
+          "observed": "OUT_OF_STOCK",
+          "expected": "OUT_OF_STOCK",
+          "ok": true,
+          "why": "app kiểm tra tồn trước khi UPDATE"
+        },
+        {
+          "what": "Giữ chỗ sofa 101 @ Q1 (dòng 1 đã giữ trước khi dòng 2 lỗi)",
+          "observed": 0,
+          "expected": "0",
+          "ok": true,
+          "why": "ROLLBACK hoàn tác cả lượt giữ chỗ hợp lệ"
+        },
+        {
+          "what": "Số đơn / dòng hàng / phiếu thanh toán",
+          "observed": [
+            1,
+            1,
+            1
+          ],
+          "expected": "[1, 1, 1]",
+          "ok": true,
+          "why": ""
+        }
+      ],
+      "metrics": {},
+      "tables": [],
+      "verdict": "PASS",
+      "seconds": 1.44
+    },
+    {
+      "key": "A1-MG",
+      "cid": "A1",
+      "dbms": "MongoDB",
+      "title": "Đặt 2 bàn Venice khi Showroom Q1 chỉ còn 1: abort hủy trọn giao dịch",
+      "hypothesis": "Lỗi validator làm abort cả transaction; không dùng transaction thì document đơn hàng đã ghi vẫn còn (đơn ma).",
+      "log": "logs/A1-MG.log",
+      "checks": [
+        {
+          "what": "Mã lỗi khi giữ chỗ vượt tồn",
+          "observed": 121,
+          "expected": "121",
+          "ok": true,
+          "why": "validator của collection inventory"
+        },
+        {
+          "what": "Số document orders",
+          "observed": 1,
+          "expected": "1",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Giữ chỗ 401 @ Showroom Q1",
+          "observed": 0,
+          "expected": "0",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Mã lỗi",
+          "observed": 121,
+          "expected": "121",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Số document orders",
+          "observed": 2,
+          "expected": "2",
+          "ok": true,
+          "why": "đơn ma: có đơn nhưng không giữ được hàng"
+        },
+        {
+          "what": "Lỗi ứng dụng",
+          "observed": "OUT_OF_STOCK",
+          "expected": "OUT_OF_STOCK",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Giữ chỗ sofa 101 @ Q1",
+          "observed": 0,
+          "expected": "0",
+          "ok": true,
+          "why": "abort hoàn tác lượt giữ chỗ của dòng 1"
+        },
+        {
+          "what": "Số document orders",
+          "observed": 1,
+          "expected": "1",
+          "ok": true,
+          "why": ""
+        }
+      ],
+      "metrics": {},
+      "tables": [],
+      "verdict": "PASS",
+      "seconds": 0.55
+    },
+    {
+      "key": "A2-MY",
+      "cid": "A2",
+      "dbms": "MySQL",
+      "title": "Lỗi giữa giao dịch nhưng ứng dụng vẫn COMMIT",
+      "hypothesis": "InnoDB chỉ rollback câu lệnh lỗi, transaction vẫn mở: COMMIT lưu phần còn lại (đơn ma). withTransaction của app và EXIT HANDLER của procedure chặn được.",
+      "log": "logs/A2-MY.log",
+      "checks": [
+        {
+          "what": "Lệnh giữ chỗ lỗi, các lệnh khác chạy tiếp",
+          "observed": [
+            null,
+            null,
+            null,
+            3819,
+            null
+          ],
+          "expected": "[None, None, None, 3819, None]",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Số đơn / dòng hàng / phiếu thanh toán được lưu",
+          "observed": [
+            2,
+            2,
+            2
+          ],
+          "expected": "[2, 2, 2]",
+          "ok": true,
+          "why": "đơn ma: có đơn 580 triệu và phiếu cọc nhưng không giữ được chiếc bàn nào"
+        },
+        {
+          "what": "Giữ chỗ 401 @ Showroom Q1",
+          "observed": 0,
+          "expected": "0",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Số đơn / dòng hàng / phiếu thanh toán",
+          "observed": [
+            1,
+            1,
+            1
+          ],
+          "expected": "[1, 1, 1]",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Lỗi trả về ứng dụng",
+          "observed": "OUT_OF_STOCK",
+          "expected": "OUT_OF_STOCK",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Số đơn / dòng hàng / phiếu thanh toán",
+          "observed": [
+            1,
+            1,
+            1
+          ],
+          "expected": "[1, 1, 1]",
+          "ok": true,
+          "why": ""
+        }
+      ],
+      "metrics": {},
+      "tables": [],
+      "verdict": "PASS",
+      "seconds": 1.35
+    },
+    {
+      "key": "A2-MG",
+      "cid": "A2",
+      "dbms": "MongoDB",
+      "title": "Lỗi giữa giao dịch nhưng ứng dụng vẫn commit",
+      "hypothesis": "Lỗi của một thao tác làm server hủy cả transaction; lệnh sau và commit đều báo NoSuchTransaction (251).",
+      "log": "logs/A2-MG.log",
+      "checks": [
+        {
+          "what": "Mã lỗi: giữ chỗ / lệnh tiếp theo / commit",
+          "observed": [
+            121,
+            251,
+            251
+          ],
+          "expected": "[121, 251, 251]",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Số document orders",
+          "observed": 1,
+          "expected": "1",
+          "ok": true,
+          "why": "không có đơn ma"
+        }
+      ],
+      "metrics": {},
+      "tables": [],
+      "verdict": "PASS",
+      "seconds": 0.27
+    },
+    {
+      "key": "A3-MY",
+      "cid": "A3",
+      "dbms": "MySQL",
+      "title": "Đổi kho xuất cho riêng một dòng hàng bằng SAVEPOINT",
+      "hypothesis": "ROLLBACK TO SAVEPOINT hủy riêng phần sau điểm đánh dấu, giữ lượt giữ chỗ sofa hợp lệ.",
+      "log": "logs/A3-MY.log",
+      "checks": [
+        {
+          "what": "Giữ 2 bàn Venice tại Q1",
+          "observed": 3819,
+          "expected": "3819",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Dòng hàng của đơn mới [biến thể, địa điểm, số lượng]",
+          "observed": [
+            [
+              101,
+              1,
+              1
+            ],
+            [
+              401,
+              3,
+              2
+            ]
+          ],
+          "expected": "[[101, 1, 1], [401, 3, 2]]",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Giữ chỗ 101@Q1 / 401@Q1 / 401@Kho BD",
+          "observed": [
+            1,
+            0,
+            2
+          ],
+          "expected": "[1, 0, 2]",
+          "ok": true,
+          "why": ""
+        }
+      ],
+      "metrics": {},
+      "tables": [],
+      "verdict": "PASS",
+      "seconds": 0.66
+    },
+    {
+      "key": "A3-MG",
+      "cid": "A3",
+      "dbms": "MongoDB",
+      "title": "Đổi kho xuất cho một dòng hàng khi không có SAVEPOINT",
+      "hypothesis": "Không có savepoint: lỗi hủy cả transaction, kể cả lượt giữ sofa hợp lệ. Cập nhật có điều kiện (matched 0, không phát sinh lỗi) cho phép thử kho khác trong cùng transaction.",
+      "log": "logs/A3-MG.log",
+      "checks": [
+        {
+          "what": "Mã lỗi: giữ 401@Q1 / thử 401@Kho BD",
+          "observed": [
+            121,
+            251
+          ],
+          "expected": "[121, 251]",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Giữ chỗ sofa 101@Q1 sau khi transaction bị hủy",
+          "observed": 0,
+          "expected": "0",
+          "ok": true,
+          "why": "mất cả lượt giữ hợp lệ, phải chạy lại từ đầu"
+        },
+        {
+          "what": "matched ở Q1 / ở Kho BD",
+          "observed": [
+            0,
+            1
+          ],
+          "expected": "[0, 1]",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Dòng hàng của đơn mới",
+          "observed": [
+            [
+              101,
+              1,
+              1
+            ],
+            [
+              401,
+              3,
+              2
+            ]
+          ],
+          "expected": "[[101, 1, 1], [401, 3, 2]]",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Giữ chỗ 101@Q1 / 401@Q1 / 401@Kho BD",
+          "observed": [
+            1,
+            0,
+            2
+          ],
+          "expected": "[1, 0, 2]",
+          "ok": true,
+          "why": ""
+        }
+      ],
+      "metrics": {},
+      "tables": [],
+      "verdict": "PASS",
+      "seconds": 0.25
+    },
+    {
+      "key": "A4-MY",
+      "cid": "A4",
+      "dbms": "MySQL",
+      "title": "Tạo bảng giữa giao dịch tăng giá 10% rồi ROLLBACK",
+      "hypothesis": "CREATE TABLE gây implicit commit: lệnh tăng giá trước đó đã được commit, ROLLBACK không còn tác dụng.",
+      "log": "logs/A4-MY.log",
+      "checks": [
+        {
+          "what": "Giá 101 / 102 sau ROLLBACK",
+          "observed": [
+            528000000,
+            682000000
+          ],
+          "expected": "[528000000, 682000000]",
+          "ok": true,
+          "why": "giá mới đã bị commit ngầm"
+        },
+        {
+          "what": "Bảng price_audit tồn tại",
+          "observed": 1,
+          "expected": "1",
+          "ok": true,
+          "why": ""
+        }
+      ],
+      "metrics": {},
+      "tables": [],
+      "verdict": "PASS",
+      "seconds": 0.69
+    },
+    {
+      "key": "A4-MG",
+      "cid": "A4",
+      "dbms": "MongoDB",
+      "title": "Tạo index / collection giữa giao dịch tăng giá 10%",
+      "hypothesis": "createIndex trên collection đã có dữ liệu bị từ chối trong transaction và làm transaction bị hủy; collection tạo mới trong transaction được rollback khi abort.",
+      "log": "logs/A4-MG.log",
+      "checks": [
+        {
+          "what": "Mã lỗi createIndex / commit",
+          "observed": [
+            263,
+            251
+          ],
+          "expected": "[263, 251]",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Giá 101 / 102",
+          "observed": [
+            480000000,
+            620000000
+          ],
+          "expected": "[480000000, 620000000]",
+          "ok": true,
+          "why": "cả giao dịch tăng giá bị hủy"
+        },
+        {
+          "what": "Collection price_audit tồn tại sau abort",
+          "observed": false,
+          "expected": "False",
+          "ok": true,
+          "why": ""
+        }
+      ],
+      "metrics": {},
+      "tables": [],
+      "verdict": "PASS",
+      "seconds": 0.25
+    },
+    {
+      "key": "B1-MY",
+      "cid": "B1",
+      "dbms": "MySQL",
+      "title": "Tra cứu bàn Venice còn bán khi phiên kia đang giữ chỗ rồi hủy (dirty read)",
+      "hypothesis": "READ UNCOMMITTED đọc được giữ chỗ chưa commit (0 rồi 1); READ COMMITTED không (1 và 1).",
+      "log": "logs/B1-MY.log",
+      "checks": [
+        {
+          "what": "READ UNCOMMITTED: số bàn còn bán [trước, sau khi A hủy]",
+          "observed": [
+            0,
+            1
+          ],
+          "expected": "[0, 1]",
+          "ok": true,
+          "why": "dirty read: thấy chiếc bàn đã hết dù giao dịch của A chưa commit"
+        },
+        {
+          "what": "READ COMMITTED: số bàn còn bán [trước, sau khi A hủy]",
+          "observed": [
+            1,
+            1
+          ],
+          "expected": "[1, 1]",
+          "ok": true,
+          "why": ""
+        }
+      ],
+      "metrics": {},
+      "tables": [],
+      "verdict": "PASS",
+      "seconds": 1.42
+    },
+    {
+      "key": "B1-MG",
+      "cid": "B1",
+      "dbms": "MongoDB",
+      "title": "Tra cứu bàn Venice còn bán khi phiên kia đang giữ chỗ rồi hủy (dirty read)",
+      "hypothesis": "MongoDB không cho đọc thay đổi chưa commit, cả trong lẫn ngoài transaction.",
+      "log": "logs/B1-MG.log",
+      "checks": [
+        {
+          "what": "Số bàn còn bán [ngoài transaction, trong transaction]",
+          "observed": [
+            1,
+            1
+          ],
+          "expected": "[1, 1]",
+          "ok": true,
+          "why": ""
+        }
+      ],
+      "metrics": {},
+      "tables": [],
+      "verdict": "PASS",
+      "seconds": 0.29
+    },
+    {
+      "key": "B2-MY",
+      "cid": "B2",
+      "dbms": "MySQL",
+      "title": "Báo cáo tồn Kho Bình Dương trong lúc có đổi giá và nhập kho (non-repeatable read, phantom)",
+      "hypothesis": "READ COMMITTED thấy giá mới và dòng mới giữa hai lần đọc; REPEATABLE READ không thấy; locking read (FOR SHARE) ở REPEATABLE READ luôn đọc bản mới nhất.",
+      "log": "logs/B2-MY.log",
+      "checks": [
+        {
+          "what": "READ COMMITTED [giá lần 1, lần 2 (triệu), (số mã, tổng tồn) lần 1, lần 2]",
+          "observed": [
+            480,
+            520,
+            [
+              3,
+              13
+            ],
+            [
+              4,
+              14
+            ]
+          ],
+          "expected": "[480, 520, [3, 13], [4, 14]]",
+          "ok": true,
+          "why": "non-repeatable read và phantom"
+        },
+        {
+          "what": "REPEATABLE READ",
+          "observed": [
+            480,
+            480,
+            [
+              3,
+              13
+            ],
+            [
+              3,
+              13
+            ]
+          ],
+          "expected": "[480, 480, [3, 13], [3, 13]]",
+          "ok": true,
+          "why": "cùng một read view"
+        },
+        {
+          "what": "REPEATABLE READ, lần đọc 2 dùng FOR SHARE",
+          "observed": [
+            480,
+            480,
+            [
+              3,
+              13
+            ],
+            [
+              4,
+              14
+            ]
+          ],
+          "expected": "[480, 480, [3, 13], [4, 14]]",
+          "ok": true,
+          "why": "locking read đọc bản mới nhất đã commit"
+        }
+      ],
+      "metrics": {},
+      "tables": [],
+      "verdict": "PASS",
+      "seconds": 2.04
+    },
+    {
+      "key": "B2-MG",
+      "cid": "B2",
+      "dbms": "MongoDB",
+      "title": "Báo cáo tồn Kho Bình Dương trong lúc có đổi giá và nhập kho",
+      "hypothesis": "Transaction snapshot không thấy thay đổi đã commit sau khi nó bắt đầu đọc; sau commit mới thấy.",
+      "log": "logs/B2-MG.log",
+      "checks": [
+        {
+          "what": "Trong transaction [giá lần 1, lần 2, (số mã, tổng tồn) lần 1, lần 2]",
+          "observed": [
+            480,
+            480,
+            [
+              3,
+              13
+            ],
+            [
+              3,
+              13
+            ]
+          ],
+          "expected": "[480, 480, [3, 13], [3, 13]]",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Sau commit (số mã, tổng tồn)",
+          "observed": [
+            4,
+            14
+          ],
+          "expected": "[4, 14]",
+          "ok": true,
+          "why": ""
+        }
+      ],
+      "metrics": {},
+      "tables": [],
+      "verdict": "PASS",
+      "seconds": 0.26
+    },
+    {
+      "key": "B3-MY",
+      "cid": "B3",
+      "dbms": "MySQL",
+      "title": "Hai sales cùng giữ chỗ sofa Lawson 240 ở Kho Bình Dương (lost update)",
+      "hypothesis": "REPEATABLE READ không chặn lost update kiểu đọc rồi ghi (kết quả 1 thay vì 2). FOR UPDATE, cột version của app và cập nhật có điều kiện đều cho kết quả đúng, nhưng version của app từ chối lượt đến sau.",
+      "log": "logs/B3-MY.log",
+      "checks": [
+        {
+          "what": "Đối chứng: giữ chỗ cuối cùng",
+          "observed": 1,
+          "expected": "1",
+          "ok": true,
+          "why": "lost update: đúng ra phải là 2"
+        },
+        {
+          "what": "Cách 1: thời gian B chờ khóa (s)",
+          "observed": 1.5,
+          "expected": "≥ 1,4",
+          "ok": true,
+          "why": "A giữ khóa 1,5 s"
+        },
+        {
+          "what": "Cách 1: giữ chỗ cuối cùng",
+          "observed": 2,
+          "expected": "2",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Cách 2: số dòng B cập nhật được ở lần đầu",
+          "observed": 0,
+          "expected": "0",
+          "ok": true,
+          "why": "version đã đổi từ 0 thành 1"
+        },
+        {
+          "what": "Cách 2: giữ chỗ sau xung đột / sau khi thử lại",
+          "observed": [
+            1,
+            2
+          ],
+          "expected": "[1, 2]",
+          "ok": true,
+          "why": "không mất cập nhật, nhưng lượt đến sau bị từ chối nếu không thử lại"
+        },
+        {
+          "what": "Cách 3: B chờ rồi cập nhật được (dòng)",
+          "observed": 1,
+          "expected": "1",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Cách 3: giữ chỗ cuối cùng",
+          "observed": 2,
+          "expected": "2",
+          "ok": true,
+          "why": ""
+        }
+      ],
+      "metrics": {},
+      "tables": [],
+      "verdict": "PASS",
+      "seconds": 6.45
+    },
+    {
+      "key": "B3-MG",
+      "cid": "B3",
+      "dbms": "MongoDB",
+      "title": "Hai sales cùng giữ chỗ sofa Lawson 240 ở Kho Bình Dương (lost update)",
+      "hypothesis": "Không dùng transaction: đọc rồi ghi mất cập nhật. Trong transaction, lượt ghi sau bị WriteConflict (112) ngay, không chờ; thử lại cho kết quả đúng.",
+      "log": "logs/B3-MG.log",
+      "checks": [
+        {
+          "what": "Đối chứng: giữ chỗ cuối cùng",
+          "observed": 1,
+          "expected": "1",
+          "ok": true,
+          "why": "lost update: đúng ra phải là 2"
+        },
+        {
+          "what": "Mã lỗi lượt ghi của B và nhãn",
+          "observed": [
+            112,
+            [
+              "TransientTransactionError"
+            ]
+          ],
+          "expected": "[112, ['TransientTransactionError']]",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Thời gian B chờ trước khi nhận lỗi (s)",
+          "observed": 0.002,
+          "expected": "< 0,1",
+          "ok": true,
+          "why": "WiredTiger hủy ngay, không xếp hàng chờ"
+        },
+        {
+          "what": "Giữ chỗ cuối cùng sau khi thử lại",
+          "observed": 2,
+          "expected": "2",
+          "ok": true,
+          "why": ""
+        }
+      ],
+      "metrics": {},
+      "tables": [],
+      "verdict": "PASS",
+      "seconds": 0.55
+    },
+    {
+      "key": "B4-MY",
+      "cid": "B4",
+      "dbms": "MySQL",
+      "title": "Hai yêu cầu lập lịch thanh toán cùng lúc cho đơn #1 (write skew)",
+      "hypothesis": "Ràng buộc 'tổng các khoản ≤ order.total, tối đa 1 khoản final' bị phá ở cách app đang làm (không transaction) và ở REPEATABLE READ; SERIALIZABLE chặn bằng deadlock; khóa dòng orders bằng FOR UPDATE chặn bằng chờ khóa.",
+      "log": "logs/B4-MY.log",
+      "checks": [
+        {
+          "what": "Như app hiện tại (không transaction): [số khoản final, tổng tiền]",
+          "observed": [
+            2,
+            883500000
+          ],
+          "expected": "[2, 883500000]",
+          "ok": true,
+          "why": "write skew: 2 khoản final, vượt order.total 294,5 triệu"
+        },
+        {
+          "what": "REPEATABLE READ: [số khoản final, tổng tiền]",
+          "observed": [
+            2,
+            883500000
+          ],
+          "expected": "[2, 883500000]",
+          "ok": true,
+          "why": "snapshot không thấy dòng của nhau, INSERT không xung đột"
+        },
+        {
+          "what": "SERIALIZABLE: mã lỗi của nạn nhân",
+          "observed": [
+            1213
+          ],
+          "expected": "[1213]",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "SERIALIZABLE: [số khoản final, tổng tiền]",
+          "observed": [
+            1,
+            589000000
+          ],
+          "expected": "[1, 589000000]",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "FOR UPDATE dòng orders: B chờ (s)",
+          "observed": 1.51,
+          "expected": "≥ 1,4",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "FOR UPDATE dòng orders: [số khoản final, tổng tiền]",
+          "observed": [
+            1,
+            589000000
+          ],
+          "expected": "[1, 589000000]",
+          "ok": true,
+          "why": ""
+        }
+      ],
+      "metrics": {},
+      "tables": [],
+      "verdict": "PASS",
+      "seconds": 5.36
+    },
+    {
+      "key": "B4-MG",
+      "cid": "B4",
+      "dbms": "MongoDB",
+      "title": "Hai yêu cầu lập lịch thanh toán cùng lúc cho đơn #1 (write skew)",
+      "hypothesis": "Snapshot isolation để lọt write skew khi khoản thanh toán là document riêng; khi nhúng payments[] vào document đơn hàng (mô hình của nhóm), hai giao dịch ghi cùng một document nên WriteConflict chặn được.",
+      "log": "logs/B4-MG.log",
+      "checks": [
+        {
+          "what": "Cả hai qua kiểm tra",
+          "observed": [
+            true,
+            true
+          ],
+          "expected": "[True, True]",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Collection riêng: [số khoản final, tổng tiền]",
+          "observed": [
+            2,
+            883500000
+          ],
+          "expected": "[2, 883500000]",
+          "ok": true,
+          "why": "write skew"
+        },
+        {
+          "what": "Nhúng: mã lỗi lượt ghi của B",
+          "observed": 112,
+          "expected": "112",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Nhúng: [số khoản final, tổng tiền]",
+          "observed": [
+            1,
+            589000000
+          ],
+          "expected": "[1, 589000000]",
+          "ok": true,
+          "why": ""
+        }
+      ],
+      "metrics": {},
+      "tables": [],
+      "verdict": "PASS",
+      "seconds": 0.57
+    },
+    {
+      "key": "B5-MY",
+      "cid": "B5",
+      "dbms": "MySQL",
+      "title": "Hai đơn giữ hai món theo thứ tự ngược nhau; chờ khóa quá hạn",
+      "hypothesis": "Deadlock (1213) hủy cả transaction nạn nhân; sắp xếp theo variant_id như app thì không deadlock; lock wait timeout (1205) chỉ hủy câu lệnh đang chờ, phần đã làm của transaction vẫn còn.",
+      "log": "logs/B5-MY.log",
+      "checks": [
+        {
+          "what": "Mã lỗi của nạn nhân deadlock",
+          "observed": [
+            1213
+          ],
+          "expected": "[1213]",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Giữ chỗ 101 / 401 tại Kho BD",
+          "observed": [
+            1,
+            1
+          ],
+          "expected": "[1, 1]",
+          "ok": true,
+          "why": "chỉ còn 2 lượt giữ của bên thắng; lượt giữ đầu của nạn nhân đã bị rollback cùng transaction"
+        },
+        {
+          "what": "Không có deadlock: mã lỗi của B",
+          "observed": [
+            null,
+            null
+          ],
+          "expected": "[None, None]",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Giữ chỗ 101 / 401 tại Kho BD",
+          "observed": [
+            2,
+            2
+          ],
+          "expected": "[2, 2]",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Mã lỗi và thời gian chờ (s)",
+          "observed": [
+            1205,
+            3.0
+          ],
+          "expected": "[1205, ≈3]",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Giữ chỗ sofa của B vẫn còn sau lỗi / sau COMMIT",
+          "observed": [
+            1,
+            1
+          ],
+          "expected": "[1, 1]",
+          "ok": true,
+          "why": "chỉ câu lệnh chờ bị hủy: đơn của B được commit dở dang nếu ứng dụng không ROLLBACK"
+        }
+      ],
+      "metrics": {},
+      "tables": [],
+      "verdict": "PASS",
+      "seconds": 7.17
+    },
+    {
+      "key": "B5-MG",
+      "cid": "B5",
+      "dbms": "MongoDB",
+      "title": "Hai đơn giữ hai món theo thứ tự ngược nhau; giới hạn thời gian của transaction",
+      "hypothesis": "Không có chờ khóa giữa hai transaction: bên ghi sau bị WriteConflict ngay. Lệnh ghi ngoài transaction thì chờ transaction kia kết thúc. Transaction quá transactionLifetimeLimitSeconds bị server hủy.",
+      "log": "logs/B5-MG.log",
+      "checks": [
+        {
+          "what": "Mã lỗi của A và thời gian chờ (s)",
+          "observed": [
+            112,
+            0.001
+          ],
+          "expected": "[112, < 0,1]",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Giữ chỗ 101 / 401 tại Kho BD",
+          "observed": [
+            1,
+            1
+          ],
+          "expected": "[1, 1]",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Lệnh ngoài transaction: chờ (s)",
+          "observed": 1.51,
+          "expected": "≥ 1,4",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Giữ chỗ 401 tại Kho BD",
+          "observed": 2,
+          "expected": "2",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Mã lỗi khi commit",
+          "observed": 251,
+          "expected": "251",
+          "ok": true,
+          "why": "server đã hủy transaction quá hạn"
+        },
+        {
+          "what": "Giữ chỗ 101 tại Kho BD",
+          "observed": 0,
+          "expected": "0",
+          "ok": true,
+          "why": ""
+        }
+      ],
+      "metrics": {},
+      "tables": [],
+      "verdict": "PASS",
+      "seconds": 14.32
+    },
+    {
+      "key": "C1-MY",
+      "cid": "C1",
+      "dbms": "MySQL",
+      "title": "Kill -9 mysqld khi giao dịch Bàn giao đã commit và một đơn khác còn dở dang",
+      "hypothesis": "Khởi động lại: redo log khôi phục giao dịch đã commit, undo hủy giao dịch chưa commit.",
+      "log": "logs/C1-MY.log",
+      "checks": [
+        {
+          "what": "Bàn giao đã commit: [trạng thái đơn, tồn / giữ chỗ 102@Kho BD, total_spent của An]",
+          "observed": [
+            "delivered",
+            [
+              2,
+              0
+            ],
+            1009000000
+          ],
+          "expected": "['delivered', [2, 0], 1009000000]",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Đơn dở dang của Chi: [số đơn, giữ chỗ 401@Q1]",
+          "observed": [
+            0,
+            0
+          ],
+          "expected": "[0, 0]",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Log có pha redo (áp dụng redo log)",
+          "observed": true,
+          "expected": "True",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Log có pha undo / rollback giao dịch chưa commit",
+          "observed": true,
+          "expected": "True",
+          "ok": true,
+          "why": ""
+        }
+      ],
+      "metrics": {
+        "recovery_log": [
+          "2026-11-09T18:15:52.286849Z 1 [Note] [MY-013883] [InnoDB] The latest found checkpoint is at lsn = 165530646 in redo log file ./#innodb_redo/#ib_redo50.",
+          "2026-11-09T18:15:52.286893Z 1 [Note] [MY-012560] [InnoDB] The log sequence number 103172704 in the system tablespace does not match the log sequence number 165530646 in the redo log files!",
+          "2026-11-09T18:15:52.286898Z 1 [Note] [MY-012551] [InnoDB] Database was not shutdown normally!",
+          "2026-11-09T18:15:52.286902Z 1 [Note] [MY-012552] [InnoDB] Starting crash recovery.",
+          "2026-11-09T18:15:52.340540Z 1 [Note] [MY-013086] [InnoDB] Starting to parse redo log at lsn = 165530636, whereas checkpoint_lsn = 165530646 and start_lsn = 165530624",
+          "2026-11-09T18:15:52.389010Z 1 [Note] [MY-012532] [InnoDB] Applying a batch of 721 redo log records ...",
+          "2026-11-09T18:15:52.990554Z 1 [Note] [MY-012535] [InnoDB] Apply batch completed!",
+          "2026-11-09T18:15:53.153454Z 1 [Note] [MY-013023] [InnoDB] 1 transaction(s) which must be rolled back or cleaned up in total 3 row operations to undo",
+          "2026-11-09T18:15:53.276014Z 0 [System] [MY-010229] [Server] Starting XA crash recovery...",
+          "2026-11-09T18:15:53.285101Z 0 [System] [MY-010232] [Server] XA crash recovery finished.",
+          "2026-11-09T18:15:53.287441Z 0 [Note] [MY-013011] [InnoDB] Rolling back trx with id 33962, 3 rows to undo",
+          "2026-11-09T18:15:53.291713Z 0 [Note] [MY-013012] [InnoDB] Rollback of trx with id 33962 completed",
+          "2026-11-09T18:15:53.373568Z 0 [System] [MY-010931] [Server] /home/claude/env/my84/bin/mysqld: ready for connections. Version: '8.4.2'  socket: '/home/claude/srv/mysql.sock'  port: 3306  conda-forge."
+        ],
+        "restart_seconds": 1.5
+      },
+      "tables": [],
+      "verdict": "PASS",
+      "seconds": 4.24
+    },
+    {
+      "key": "C1-MG",
+      "cid": "C1",
+      "dbms": "MongoDB",
+      "title": "Kill -9 PRIMARY khi giao dịch Bàn giao đã commit (w: majority) và một đơn khác còn dở dang",
+      "hypothesis": "Replica set bầu PRIMARY mới; giao dịch đã commit với w: majority còn nguyên; giao dịch dở dang bị hủy; node bị kill tự khôi phục từ checkpoint và journal khi khởi động lại.",
+      "log": "logs/C1-MG.log",
+      "checks": [
+        {
+          "what": "Bàn giao đã commit: [trạng thái đơn, tồn / giữ chỗ 102@Kho BD, total_spent của An]",
+          "observed": [
+            "delivered",
+            [
+              2,
+              0
+            ],
+            1009000000
+          ],
+          "expected": "['delivered', [2, 0], 1009000000]",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Commit của B sau failover thất bại",
+          "observed": true,
+          "expected": "True",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Đơn dở dang của Chi: [số đơn, giữ chỗ 401@Q1]",
+          "observed": [
+            0,
+            0
+          ],
+          "expected": "[0, 0]",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Thời gian đến khi ghi được trên PRIMARY mới (s)",
+          "observed": 10.5,
+          "expected": "≤ 20",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Node bị kill trở lại replica set",
+          "observed": true,
+          "expected": "True",
+          "ok": true,
+          "why": ""
+        }
+      ],
+      "metrics": {
+        "failover_seconds": 10.5,
+        "recovery_log": [
+          "Recovering data from the last clean checkpoint.",
+          "Recovering log 3 through 4",
+          "Recovering log 4 through 4",
+          "Main recovery loop: starting at 3/1094528 to 4/256",
+          "recovery log replay has successfully finished and ran for 214 milliseconds",
+          "Set global recovery timestamp: (1794248138, 31)",
+          "recovery rollback to stable has successfully finished and ran for 10 milliseconds",
+          "recovery checkpoint has successfully finished and ran for 22 milliseconds",
+          "recovery was completed successfully and took 248ms, including 214ms for the log replay, 10ms for the rollback to stable, and 22ms for the checkpoint.",
+          "Completed oplog application for recovery (numOpsApplied=48)"
+        ]
+      },
+      "tables": [],
+      "verdict": "PASS",
+      "seconds": 23.36
+    },
+    {
+      "key": "C2-MY",
+      "cid": "C2",
+      "dbms": "MySQL",
+      "title": "Thông lượng giao dịch Đặt hàng tuần tự theo cấu hình độ bền",
+      "hypothesis": "H1: nới độ bền (flush=2, sync_binlog=0) tăng thông lượng; H2: stored procedure (1 lượt gọi mạng) nhanh hơn câu lệnh từ ứng dụng mà không giảm độ bền.",
+      "log": "logs/C2-MY.log",
+      "checks": [
+        {
+          "what": "Mọi lần đo đều đúng (số đơn = số giữ chỗ = số đơn gửi)",
+          "observed": true,
+          "expected": "True",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "H1: trung vị flush=2 / flush=1",
+          "observed": 1.59,
+          "expected": "> 1",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "H2: trung vị procedure / câu lệnh từ ứng dụng",
+          "observed": 1.66,
+          "expected": "> 1",
+          "ok": true,
+          "why": ""
+        }
+      ],
+      "metrics": {
+        "app_flush1": {
+          "config": "app_flush1",
+          "n": 5,
+          "median": 380.3,
+          "min": 350.5,
+          "max": 386.1,
+          "stdev": 16.51,
+          "cv_pct": 4.4
+        },
+        "app_flush2": {
+          "config": "app_flush2",
+          "n": 5,
+          "median": 604.9,
+          "min": 590.2,
+          "max": 631.6,
+          "stdev": 16.32,
+          "cv_pct": 2.7
+        },
+        "proc_flush1": {
+          "config": "proc_flush1",
+          "n": 5,
+          "median": 631.5,
+          "min": 580.8,
+          "max": 665.3,
+          "stdev": 34.52,
+          "cv_pct": 5.6
+        }
+      },
+      "tables": [
+        "C2-MY_raw.csv",
+        "C2-MY_summary.csv"
+      ],
+      "verdict": "PASS",
+      "seconds": 41.77
+    },
+    {
+      "key": "C2-MG",
+      "cid": "C2",
+      "dbms": "MongoDB",
+      "title": "Thông lượng giao dịch Đặt hàng tuần tự theo write concern và có / không transaction",
+      "hypothesis": "H3: w: 1 nhanh hơn w: majority; H4: với w: majority, dùng transaction nhanh hơn không dùng (chỉ chờ nhân bản một lần lúc commit).",
+      "log": "logs/C2-MG.log",
+      "checks": [
+        {
+          "what": "Mọi lần đo đều đúng",
+          "observed": true,
+          "expected": "True",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "H3: trung vị w:1 / w:majority (có transaction)",
+          "observed": 1.19,
+          "expected": "> 1",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "H4: trung vị có / không transaction (w: majority)",
+          "observed": 1.38,
+          "expected": "> 1",
+          "ok": true,
+          "why": ""
+        }
+      ],
+      "metrics": {
+        "txn_majority": {
+          "config": "txn_majority",
+          "n": 5,
+          "median": 148.1,
+          "min": 138.6,
+          "max": 157.2,
+          "stdev": 7.22,
+          "cv_pct": 4.9
+        },
+        "txn_w1": {
+          "config": "txn_w1",
+          "n": 5,
+          "median": 175.5,
+          "min": 165.2,
+          "max": 183.2,
+          "stdev": 6.87,
+          "cv_pct": 4.0
+        },
+        "notxn_majority": {
+          "config": "notxn_majority",
+          "n": 5,
+          "median": 107.1,
+          "min": 106.5,
+          "max": 110.6,
+          "stdev": 1.71,
+          "cv_pct": 1.6
+        },
+        "notxn_w1": {
+          "config": "notxn_w1",
+          "n": 5,
+          "median": 188.9,
+          "min": 168.0,
+          "max": 207.7,
+          "stdev": 16.0,
+          "cv_pct": 8.3
+        }
+      },
+      "tables": [
+        "C2-MG_raw.csv",
+        "C2-MG_summary.csv"
+      ],
+      "verdict": "PASS",
+      "seconds": 148.23
+    },
+    {
+      "key": "C3-MY",
+      "cid": "C3",
+      "dbms": "MySQL",
+      "title": "8 luồng x 100 đơn cùng mua sofa Lawson 240 tại Kho Bình Dương, tồn đúng 800",
+      "hypothesis": "Cập nhật có điều kiện: 800/800, không thử lại, đơn thứ 801 bị từ chối. Version như app: không bán vượt, nhưng nếu không thử lại thì nhiều đơn bị từ chối dù kho còn hàng.",
+      "log": "logs/C3-MY.log",
+      "checks": [
+        {
+          "what": "Cập nhật có điều kiện: [đơn thành công, thử lại, đơn thứ 801] mọi lần",
+          "observed": [
+            [
+              800,
+              0,
+              "OUT_OF_STOCK"
+            ]
+          ],
+          "expected": "[(800, 0, 'OUT_OF_STOCK')]",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Version + thử lại: đủ 800 đơn và đơn 801 bị từ chối mọi lần",
+          "observed": true,
+          "expected": "True",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Version như app, không thử lại: có đơn bị từ chối dù còn hàng",
+          "observed": true,
+          "expected": "True",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Mọi lần: số đơn = số giữ chỗ (không bán vượt, không mất)",
+          "observed": true,
+          "expected": "True",
+          "ok": true,
+          "why": ""
+        }
+      ],
+      "metrics": {
+        "cond": {
+          "config": "cond",
+          "n": 5,
+          "median": 391.2,
+          "min": 374.9,
+          "max": 432.3,
+          "stdev": 25.84,
+          "cv_pct": 6.5,
+          "retries_median": 0,
+          "retries_min": 0,
+          "retries_max": 0,
+          "rejected_median": 0,
+          "rejected_min": 0,
+          "rejected_max": 0,
+          "ok_median": 800
+        },
+        "version_retry": {
+          "config": "version_retry",
+          "n": 5,
+          "median": 133.0,
+          "min": 128.8,
+          "max": 142.5,
+          "stdev": 5.06,
+          "cv_pct": 3.8,
+          "retries_median": 4884,
+          "retries_min": 4729,
+          "retries_max": 5227,
+          "rejected_median": 0,
+          "rejected_min": 0,
+          "rejected_max": 0,
+          "ok_median": 800
+        },
+        "version_app": {
+          "config": "version_app",
+          "n": 5,
+          "median": 124.5,
+          "min": 115.0,
+          "max": 146.7,
+          "stdev": 11.79,
+          "cv_pct": 9.2,
+          "retries_median": 0,
+          "retries_min": 0,
+          "retries_max": 0,
+          "rejected_median": 698,
+          "rejected_min": 697,
+          "rejected_max": 699,
+          "ok_median": 102
+        }
+      },
+      "tables": [
+        "C3-MY_raw.csv"
+      ],
+      "verdict": "PASS",
+      "seconds": 54.4
+    },
+    {
+      "key": "C3-MG",
+      "cid": "C3",
+      "dbms": "MongoDB",
+      "title": "8 luồng x 100 đơn cùng mua sofa Lawson 240 tại Kho Bình Dương, tồn đúng 800",
+      "hypothesis": "withTransaction tự thử lại khi WriteConflict: 800/800 đúng, đơn thứ 801 bị từ chối, nhưng nhiều lần thử lại.",
+      "log": "logs/C3-MG.log",
+      "checks": [
+        {
+          "what": "Mọi lần: 800 đơn thành công và đơn 801 bị từ chối",
+          "observed": true,
+          "expected": "True",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Mọi lần có thử lại do WriteConflict",
+          "observed": true,
+          "expected": "True",
+          "ok": true,
+          "why": ""
+        },
+        {
+          "what": "Mọi lần: số đơn = số giữ chỗ",
+          "observed": true,
+          "expected": "True",
+          "ok": true,
+          "why": ""
+        }
+      ],
+      "metrics": {
+        "txn_cond": {
+          "config": "txn_cond",
+          "n": 5,
+          "median": 85.2,
+          "min": 82.6,
+          "max": 90.1,
+          "stdev": 2.81,
+          "cv_pct": 3.3,
+          "retries_median": 1108,
+          "retries_min": 977,
+          "retries_max": 1198
+        }
+      },
+      "tables": [
+        "C3-MG_raw.csv"
+      ],
+      "verdict": "PASS",
+      "seconds": 48.17
+    }
+  ]
+}

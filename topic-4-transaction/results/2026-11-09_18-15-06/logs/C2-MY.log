@@ -1,0 +1,26 @@
+====================================================================================================
+[C2-MY] Thông lượng giao dịch Đặt hàng tuần tự theo cấu hình độ bền (MySQL)
+Giả thuyết: H1: nới độ bền (flush=2, sync_binlog=0) tăng thông lượng; H2: stored procedure (1 lượt gọi mạng) nhanh hơn câu lệnh từ ứng dụng mà không giảm độ bền.
+[t=  3.47s] - | lần 1 | App (câu lệnh từ ứng dụng), flush=1 + sync_binlog=1     |   383.8 đơn/s | 2.60 ms/đơn
+[t=  5.98s] - | lần 1 | App (câu lệnh từ ứng dụng), flush=2 + sync_binlog=0     |   593.4 đơn/s | 1.69 ms/đơn
+[t=  8.17s] - | lần 1 | Stored procedure, flush=1 + sync_binlog=1               |   665.3 đơn/s | 1.50 ms/đơn
+[t= 10.60s] - | lần 2 | App (câu lệnh từ ứng dụng), flush=2 + sync_binlog=0     |   604.9 đơn/s | 1.65 ms/đơn
+[t= 12.82s] - | lần 2 | Stored procedure, flush=1 + sync_binlog=1               |   637.0 đơn/s | 1.57 ms/đơn
+[t= 16.33s] - | lần 2 | App (câu lệnh từ ứng dụng), flush=1 + sync_binlog=1     |   380.3 đơn/s | 2.63 ms/đơn
+[t= 18.91s] - | lần 3 | Stored procedure, flush=1 + sync_binlog=1               |   580.8 đơn/s | 1.72 ms/đơn
+[t= 22.67s] - | lần 3 | App (câu lệnh từ ứng dụng), flush=1 + sync_binlog=1     |   350.5 đơn/s | 2.85 ms/đơn
+[t= 25.07s] - | lần 3 | App (câu lệnh từ ứng dụng), flush=2 + sync_binlog=0     |   631.6 đơn/s | 1.58 ms/đơn
+[t= 28.48s] - | lần 4 | App (câu lệnh từ ứng dụng), flush=1 + sync_binlog=1     |   386.1 đơn/s | 2.59 ms/đơn
+[t= 30.84s] - | lần 4 | App (câu lệnh từ ứng dụng), flush=2 + sync_binlog=0     |   607.3 đơn/s | 1.65 ms/đơn
+[t= 33.17s] - | lần 4 | Stored procedure, flush=1 + sync_binlog=1               |   631.5 đơn/s | 1.58 ms/đơn
+[t= 35.66s] - | lần 5 | App (câu lệnh từ ứng dụng), flush=2 + sync_binlog=0     |   590.2 đơn/s | 1.69 ms/đơn
+[t= 38.08s] - | lần 5 | Stored procedure, flush=1 + sync_binlog=1               |   592.3 đơn/s | 1.69 ms/đơn
+[t= 41.75s] - | lần 5 | App (câu lệnh từ ứng dụng), flush=1 + sync_binlog=1     |   357.1 đơn/s | 2.80 ms/đơn
+[t= 41.77s] - | TỔNG HỢP | App (câu lệnh từ ứng dụng), flush=1 + sync_binlog=1     | trung vị 380.3 [350.5; 386.1] | CV 4.4%
+[t= 41.77s] - | TỔNG HỢP | App (câu lệnh từ ứng dụng), flush=2 + sync_binlog=0     | trung vị 604.9 [590.2; 631.6] | CV 2.7%
+[t= 41.77s] - | TỔNG HỢP | Stored procedure, flush=1 + sync_binlog=1               | trung vị 631.5 [580.8; 665.3] | CV 5.6%
+  [KHỚP ] Mọi lần đo đều đúng (số đơn = số giữ chỗ = số đơn gửi): quan sát = True | kỳ vọng True
+  [KHỚP ] H1: trung vị flush=2 / flush=1: quan sát = 1.59 | kỳ vọng > 1
+  [KHỚP ] H2: trung vị procedure / câu lệnh từ ứng dụng: quan sát = 1.66 | kỳ vọng > 1
+
+  => PASS (3/3 kiểm tra khớp, 41.77s)

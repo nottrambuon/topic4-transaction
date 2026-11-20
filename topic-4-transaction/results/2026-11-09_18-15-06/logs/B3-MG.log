@@ -1,0 +1,43 @@
+====================================================================================================
+[B3-MG] Hai sales cùng giữ chỗ sofa Lawson 240 ở Kho Bình Dương (lost update) (MongoDB)
+Giả thuyết: Không dùng transaction: đọc rồi ghi mất cập nhật. Trong transaction, lượt ghi sau bị WriteConflict (112) ngay, không chờ; thử lại cho kết quả đúng.
+
+  >> Đối chứng: không dùng transaction, đọc rồi ghi giá trị tự tính
+[t=  0.28s] A | inventory.findOne({ _id: "101:3" }).qty_reserved
+[t=  0.28s] A | => 0
+[t=  0.28s]     B | inventory.findOne({ _id: "101:3" }).qty_reserved
+[t=  0.28s]     B | => 0
+[t=  0.28s] A | inventory.updateOne({ _id: "101:3" }, { $set: { qty_reserved: 1 } })
+[t=  0.29s] A | => matched 1, modified 1
+[t=  0.29s]     B | inventory.updateOne({ _id: "101:3" }, { $set: { qty_reserved: 1 } })
+[t=  0.29s]     B | => matched 1, modified 0
+  [KHỚP ] Đối chứng: giữ chỗ cuối cùng: quan sát = 1 | kỳ vọng 1 (lost update: đúng ra phải là 2)
+
+  >> Hai transaction snapshot cùng đọc rồi ghi
+[t=  0.53s] A | session.startTransaction({ readConcern: "snapshot", writeConcern: { w: "majority" } })
+[t=  0.53s]     B | session.startTransaction({ readConcern: "snapshot", writeConcern: { w: "majority" } })
+[t=  0.53s] A | inventory.findOne({ _id: "101:3" }).qty_reserved
+[t=  0.53s] A | => 0
+[t=  0.53s]     B | inventory.findOne({ _id: "101:3" }).qty_reserved
+[t=  0.53s]     B | => 0
+[t=  0.53s] A | inventory.updateOne({ _id: "101:3" }, { $set: { qty_reserved: 1 } })
+[t=  0.53s] A | => matched 1, modified 1
+[t=  0.53s]     B | inventory.updateOne({ _id: "101:3" }, { $set: { qty_reserved: 1 } })
+[t=  0.54s]     B | => ERROR 112 WriteConflict ['TransientTransactionError']
+[t=  0.54s]     B | session.abortTransaction()
+[t=  0.54s]     B | => abort OK
+[t=  0.54s] A | session.commitTransaction()
+[t=  0.54s] A | => commit OK
+  -- withTransaction thấy nhãn TransientTransactionError nên chạy lại cả giao dịch của B
+[t=  0.54s]     B | session.startTransaction({ readConcern: "snapshot", writeConcern: { w: "majority" } })
+[t=  0.54s]     B | inventory.findOne({ _id: "101:3" }).qty_reserved
+[t=  0.54s]     B | => 1
+[t=  0.54s]     B | inventory.updateOne({ _id: "101:3" }, { $set: { qty_reserved: 2 } })
+[t=  0.54s]     B | => matched 1, modified 1
+[t=  0.54s]     B | session.commitTransaction()
+[t=  0.55s]     B | => commit OK
+  [KHỚP ] Mã lỗi lượt ghi của B và nhãn: quan sát = [112, ['TransientTransactionError']] | kỳ vọng [112, ['TransientTransactionError']]
+  [KHỚP ] Thời gian B chờ trước khi nhận lỗi (s): quan sát = 0.002 | kỳ vọng < 0,1 (WiredTiger hủy ngay, không xếp hàng chờ)
+  [KHỚP ] Giữ chỗ cuối cùng sau khi thử lại: quan sát = 2 | kỳ vọng 2
+
+  => PASS (4/4 kiểm tra khớp, 0.55s)

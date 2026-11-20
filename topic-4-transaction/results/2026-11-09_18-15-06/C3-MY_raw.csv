@@ -1,0 +1,16 @@
+lan,config,giay,don_thanh_cong,orders_per_sec,bi_tu_choi,thu_lai,deadlock,don_ghi,giu_cho,don_vuot,dung
+1,cond,1.85,800,432.3,0,0,0,800,800,OUT_OF_STOCK,True
+1,version_retry,5.615,800,142.5,0,4760,0,800,800,OUT_OF_STOCK,True
+1,version_app,0.792,102,128.8,698,0,0,102,102,,True
+2,version_retry,5.93,800,134.9,0,4729,0,800,800,OUT_OF_STOCK,True
+2,version_app,0.821,101,123.0,699,0,0,101,101,,True
+2,cond,2.045,800,391.2,0,0,0,800,800,OUT_OF_STOCK,True
+3,version_app,0.887,102,115.0,698,0,0,102,102,,True
+3,cond,2.134,800,374.9,0,0,0,800,800,OUT_OF_STOCK,True
+3,version_retry,6.032,800,132.6,0,5008,0,800,800,OUT_OF_STOCK,True
+4,cond,2.131,800,375.4,0,0,0,800,800,OUT_OF_STOCK,True
+4,version_retry,6.214,800,128.8,0,5227,0,800,800,OUT_OF_STOCK,True
+4,version_app,0.819,102,124.5,698,0,0,102,102,,True
+5,version_retry,6.015,800,133.0,0,4884,0,800,800,OUT_OF_STOCK,True
+5,version_app,0.702,103,146.7,697,0,0,103,103,,True
+5,cond,1.914,800,418.1,0,0,0,800,800,OUT_OF_STOCK,True

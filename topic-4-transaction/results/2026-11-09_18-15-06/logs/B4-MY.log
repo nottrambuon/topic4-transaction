@@ -1,0 +1,93 @@
+====================================================================================================
+[B4-MY] Hai yêu cầu lập lịch thanh toán cùng lúc cho đơn #1 (write skew) (MySQL)
+Giả thuyết: Ràng buộc 'tổng các khoản ≤ order.total, tối đa 1 khoản final' bị phá ở cách app đang làm (không transaction) và ở REPEATABLE READ; SERIALIZABLE chặn bằng deadlock; khóa dòng orders bằng FOR UPDATE chặn bằng chờ khóa.
+
+  >> Cách: app (autocommit). Đơn #1 tổng 589 triệu, đã có khoản cọc 294,5 triệu; mỗi yêu cầu thêm khoản final 294,5 triệu
+[t=  0.72s] A | SELECT type, amount, status FROM payments WHERE order_id = 1
+[t=  0.72s] A | => type=deposit, amount=294.500.000, status=paid
+[t=  0.72s]     B | SELECT type, amount, status FROM payments WHERE order_id = 1
+[t=  0.72s]     B | => type=deposit, amount=294.500.000, status=paid
+  -- Cả hai đều kiểm tra ràng buộc: A đạt, B đạt
+[t=  0.72s] A | INSERT INTO payments (order_id, type, amount, due_date, status) VALUES (1, 'final', 294500000, CURDATE() + INTERVAL 30 DAY, 'pending')
+[t=  0.73s] A | => 1 row(s) affected
+[t=  0.73s]     B | INSERT INTO payments (order_id, type, amount, due_date, status) VALUES (1, 'final', 294500000, CURDATE() + INTERVAL 30 DAY, 'pending')
+[t=  0.73s]     B | => 1 row(s) affected
+
+  >> Cách: REPEATABLE READ. Đơn #1 tổng 589 triệu, đã có khoản cọc 294,5 triệu; mỗi yêu cầu thêm khoản final 294,5 triệu
+[t=  1.40s] A | START TRANSACTION
+[t=  1.40s] A | => 0 row(s) affected
+[t=  1.40s]     B | START TRANSACTION
+[t=  1.40s]     B | => 0 row(s) affected
+[t=  1.40s] A | SELECT type, amount, status FROM payments WHERE order_id = 1
+[t=  1.40s] A | => type=deposit, amount=294.500.000, status=paid
+[t=  1.40s]     B | SELECT type, amount, status FROM payments WHERE order_id = 1
+[t=  1.40s]     B | => type=deposit, amount=294.500.000, status=paid
+  -- Cả hai đều kiểm tra ràng buộc: A đạt, B đạt
+[t=  1.40s] A | INSERT INTO payments (order_id, type, amount, due_date, status) VALUES (1, 'final', 294500000, CURDATE() + INTERVAL 30 DAY, 'pending')
+[t=  1.40s] A | => 1 row(s) affected
+[t=  1.40s]     B | INSERT INTO payments (order_id, type, amount, due_date, status) VALUES (1, 'final', 294500000, CURDATE() + INTERVAL 30 DAY, 'pending')
+[t=  1.40s]     B | => 1 row(s) affected
+[t=  1.40s] A | COMMIT
+[t=  1.40s] A | => 0 row(s) affected
+[t=  1.40s]     B | COMMIT
+[t=  1.40s]     B | => 0 row(s) affected
+
+  >> Cách: SERIALIZABLE. Đơn #1 tổng 589 triệu, đã có khoản cọc 294,5 triệu; mỗi yêu cầu thêm khoản final 294,5 triệu
+[t=  2.07s] A | SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE
+[t=  2.07s] A | => 0 row(s) affected
+[t=  2.08s]     B | SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE
+[t=  2.08s]     B | => 0 row(s) affected
+[t=  2.08s] A | START TRANSACTION
+[t=  2.08s] A | => 0 row(s) affected
+[t=  2.08s]     B | START TRANSACTION
+[t=  2.09s]     B | => 0 row(s) affected
+[t=  2.09s] A | SELECT type, amount, status FROM payments WHERE order_id = 1
+[t=  2.09s] A | => type=deposit, amount=294.500.000, status=paid
+[t=  2.09s]     B | SELECT type, amount, status FROM payments WHERE order_id = 1
+[t=  2.09s]     B | => type=deposit, amount=294.500.000, status=paid
+  -- Cả hai đều kiểm tra ràng buộc: A đạt, B đạt
+[t=  2.09s] A | INSERT INTO payments (order_id, type, amount, due_date, status) VALUES (1, 'final', 294500000, CURDATE() + INTERVAL 30 DAY, 'pending') (đang chờ...)
+[t=  3.09s]     B | INSERT INTO payments (order_id, type, amount, due_date, status) VALUES (1, 'final', 294500000, CURDATE() + INTERVAL 30 DAY, 'pending')
+[t=  3.09s]     B | => ERROR 1213: Deadlock found when trying to get lock; try restarting transaction
+[t=  3.09s] A | => 1 row(s) affected (sau khi chờ 1.00s)
+[t=  3.09s] A | COMMIT
+[t=  3.09s] A | => 0 row(s) affected
+  -- Phiên B bị chọn làm nạn nhân deadlock, transaction đã bị rollback; chạy lại
+[t=  3.09s]     B | START TRANSACTION
+[t=  3.09s]     B | => 0 row(s) affected
+[t=  3.09s]     B | SELECT type, amount, status FROM payments WHERE order_id = 1
+[t=  3.09s]     B | => type=deposit, amount=294.500.000, status=paid
+                B |    type=final, amount=294.500.000, status=pending
+[t=  3.09s]     B | => kiểm tra ràng buộc thất bại: từ chối lập lịch
+[t=  3.09s]     B | COMMIT
+[t=  3.09s]     B | => 0 row(s) affected
+
+  >> Cách: REPEATABLE READ + FOR UPDATE orders. Đơn #1 tổng 589 triệu, đã có khoản cọc 294,5 triệu; mỗi yêu cầu thêm khoản final 294,5 triệu
+[t=  3.84s] A | START TRANSACTION
+[t=  3.84s] A | => 0 row(s) affected
+[t=  3.84s]     B | START TRANSACTION
+[t=  3.84s]     B | => 0 row(s) affected
+[t=  3.84s] A | SELECT id FROM orders WHERE id = 1 FOR UPDATE
+[t=  3.84s] A | => id=1
+[t=  3.84s]     B | SELECT id FROM orders WHERE id = 1 FOR UPDATE (đang chờ...)
+[t=  5.35s] A | SELECT type, amount, status FROM payments WHERE order_id = 1
+[t=  5.35s] A | => type=deposit, amount=294.500.000, status=paid
+[t=  5.35s] A | INSERT INTO payments (order_id, type, amount, due_date, status) VALUES (1, 'final', 294500000, CURDATE() + INTERVAL 30 DAY, 'pending')
+[t=  5.35s] A | => 1 row(s) affected
+[t=  5.35s] A | COMMIT
+[t=  5.35s] A | => 0 row(s) affected
+[t=  5.35s]     B | => id=1 (sau khi chờ 1.51s)
+[t=  5.35s]     B | SELECT type, amount, status FROM payments WHERE order_id = 1
+[t=  5.35s]     B | => type=deposit, amount=294.500.000, status=paid
+                B |    type=final, amount=294.500.000, status=pending
+[t=  5.35s]     B | => kiểm tra ràng buộc thất bại: từ chối lập lịch
+[t=  5.35s]     B | COMMIT
+[t=  5.35s]     B | => 0 row(s) affected
+  [KHỚP ] Như app hiện tại (không transaction): [số khoản final, tổng tiền]: quan sát = [2, 883500000] | kỳ vọng [2, 883500000] (write skew: 2 khoản final, vượt order.total 294,5 triệu)
+  [KHỚP ] REPEATABLE READ: [số khoản final, tổng tiền]: quan sát = [2, 883500000] | kỳ vọng [2, 883500000] (snapshot không thấy dòng của nhau, INSERT không xung đột)
+  [KHỚP ] SERIALIZABLE: mã lỗi của nạn nhân: quan sát = [1213] | kỳ vọng [1213]
+  [KHỚP ] SERIALIZABLE: [số khoản final, tổng tiền]: quan sát = [1, 589000000] | kỳ vọng [1, 589000000]
+  [KHỚP ] FOR UPDATE dòng orders: B chờ (s): quan sát = 1.51 | kỳ vọng ≥ 1,4
+  [KHỚP ] FOR UPDATE dòng orders: [số khoản final, tổng tiền]: quan sát = [1, 589000000] | kỳ vọng [1, 589000000]
+
+  => PASS (6/6 kiểm tra khớp, 5.36s)

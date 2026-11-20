@@ -1,0 +1,34 @@
+====================================================================================================
+[A2-MY] Lỗi giữa giao dịch nhưng ứng dụng vẫn COMMIT (MySQL)
+Giả thuyết: InnoDB chỉ rollback câu lệnh lỗi, transaction vẫn mở: COMMIT lưu phần còn lại (đơn ma). withTransaction của app và EXIT HANDLER của procedure chặn được.
+
+  >> Phần 1: bỏ qua lỗi rồi COMMIT
+[t=  0.62s] A | START TRANSACTION
+[t=  0.62s] A | => 0 row(s) affected
+[t=  0.62s] A | INSERT INTO orders (customer_id, subtotal, discount, total, shipping_address) VALUES (2, 580000000, 0, 580000000, '5 Tràng Tiền')
+[t=  0.62s] A | => 1 row(s) affected
+[t=  0.62s] A | SET @oid = LAST_INSERT_ID()
+[t=  0.62s] A | => 0 row(s) affected
+[t=  0.62s] A | INSERT INTO order_items (order_id, variant_id, location_id, quantity, unit_price) VALUES (@oid, 401, 1, 2, 290000000)
+[t=  0.62s] A | => 1 row(s) affected
+[t=  0.62s] A | UPDATE inventory SET qty_reserved = qty_reserved + 2, version = version + 1 WHERE variant_id = 401 AND location_id = 1
+[t=  0.62s] A | => ERROR 3819: Check constraint 'chk_inventory_reserved_le_on_hand' is violated.
+[t=  0.62s] A | INSERT INTO payments (order_id, type, amount, due_date, status) VALUES (@oid, 'deposit', 290000000, CURDATE(), 'pending')
+[t=  0.62s] A | => 1 row(s) affected
+  [KHỚP ] Lệnh giữ chỗ lỗi, các lệnh khác chạy tiếp: quan sát = [None, None, None, 3819, None] | kỳ vọng [None, None, None, 3819, None]
+[t=  0.62s] A | COMMIT
+[t=  0.62s] A | => 0 row(s) affected
+  [KHỚP ] Số đơn / dòng hàng / phiếu thanh toán được lưu: quan sát = [2, 2, 2] | kỳ vọng [2, 2, 2] (đơn ma: có đơn 580 triệu và phiếu cọc nhưng không giữ được chiếc bàn nào)
+  [KHỚP ] Giữ chỗ 401 @ Showroom Q1: quan sát = 0 | kỳ vọng 0
+
+  >> Phần 2: cùng các câu lệnh, bọc trong withTransaction như config/db.ts (lỗi -> ROLLBACK)
+[t=  1.33s] A | withTransaction(...) => lỗi 3819, ROLLBACK
+  [KHỚP ] Số đơn / dòng hàng / phiếu thanh toán: quan sát = [1, 1, 1] | kỳ vọng [1, 1, 1]
+
+  >> Phần 3: stored procedure sp_place_order (EXIT HANDLER: ROLLBACK; RESIGNAL)
+[t=  1.34s] A | CALL sp_place_order(2, 401, 1, 2, '5 Tràng Tiền', @oid)
+[t=  1.34s] A | => ERROR 1644: OUT_OF_STOCK
+  [KHỚP ] Lỗi trả về ứng dụng: quan sát = OUT_OF_STOCK | kỳ vọng OUT_OF_STOCK
+  [KHỚP ] Số đơn / dòng hàng / phiếu thanh toán: quan sát = [1, 1, 1] | kỳ vọng [1, 1, 1]
+
+  => PASS (6/6 kiểm tra khớp, 1.35s)

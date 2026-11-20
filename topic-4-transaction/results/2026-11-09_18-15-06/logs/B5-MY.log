@@ -1,0 +1,67 @@
+====================================================================================================
+[B5-MY] Hai đơn giữ hai món theo thứ tự ngược nhau; chờ khóa quá hạn (MySQL)
+Giả thuyết: Deadlock (1213) hủy cả transaction nạn nhân; sắp xếp theo variant_id như app thì không deadlock; lock wait timeout (1205) chỉ hủy câu lệnh đang chờ, phần đã làm của transaction vẫn còn.
+
+  >> Phần 1: A giữ sofa 101 rồi bàn 401; B giữ bàn 401 rồi sofa 101 (Kho Bình Dương)
+[t=  0.69s] A | START TRANSACTION
+[t=  0.69s] A | => 0 row(s) affected
+[t=  0.69s]     B | START TRANSACTION
+[t=  0.69s]     B | => 0 row(s) affected
+[t=  0.69s] A | UPDATE inventory SET qty_reserved = qty_reserved + 1, version = version + 1 WHERE variant_id = 101 AND location_id = 3 AND (qty_on_hand - qty_reserved) >= 1
+[t=  0.69s] A | => 1 row(s) affected
+[t=  0.69s]     B | UPDATE inventory SET qty_reserved = qty_reserved + 1, version = version + 1 WHERE variant_id = 401 AND location_id = 3 AND (qty_on_hand - qty_reserved) >= 1
+[t=  0.69s]     B | => 1 row(s) affected
+[t=  0.69s] A | UPDATE inventory SET qty_reserved = qty_reserved + 1, version = version + 1 WHERE variant_id = 401 AND location_id = 3 AND (qty_on_hand - qty_reserved) >= 1 (đang chờ...)
+[t=  1.69s]     B | UPDATE inventory SET qty_reserved = qty_reserved + 1, version = version + 1 WHERE variant_id = 101 AND location_id = 3 AND (qty_on_hand - qty_reserved) >= 1
+[t=  1.70s]     B | => ERROR 1213: Deadlock found when trying to get lock; try restarting transaction
+[t=  1.70s] A | => 1 row(s) affected (sau khi chờ 1.00s)
+[t=  1.70s] A | COMMIT
+[t=  1.70s] A | => 0 row(s) affected
+[t=  1.70s]     B | COMMIT
+[t=  1.70s]     B | => 0 row(s) affected
+  [KHỚP ] Mã lỗi của nạn nhân deadlock: quan sát = [1213] | kỳ vọng [1213]
+  [KHỚP ] Giữ chỗ 101 / 401 tại Kho BD: quan sát = [1, 1] | kỳ vọng [1, 1] (chỉ còn 2 lượt giữ của bên thắng; lượt giữ đầu của nạn nhân đã bị rollback cùng transaction)
+
+  >> Phần 2: cả hai giữ theo thứ tự variant_id tăng dần (như placeOrder của app)
+[t=  2.39s] A | START TRANSACTION
+[t=  2.39s] A | => 0 row(s) affected
+[t=  2.39s]     B | START TRANSACTION
+[t=  2.39s]     B | => 0 row(s) affected
+[t=  2.39s] A | UPDATE inventory SET qty_reserved = qty_reserved + 1, version = version + 1 WHERE variant_id = 101 AND location_id = 3 AND (qty_on_hand - qty_reserved) >= 1
+[t=  2.39s] A | => 1 row(s) affected
+[t=  2.39s]     B | UPDATE inventory SET qty_reserved = qty_reserved + 1, version = version + 1 WHERE variant_id = 101 AND location_id = 3 AND (qty_on_hand - qty_reserved) >= 1 (đang chờ...)
+[t=  2.39s] A | UPDATE inventory SET qty_reserved = qty_reserved + 1, version = version + 1 WHERE variant_id = 401 AND location_id = 3 AND (qty_on_hand - qty_reserved) >= 1
+[t=  2.39s] A | => 1 row(s) affected
+[t=  3.39s] A | COMMIT
+[t=  3.39s] A | => 0 row(s) affected
+[t=  3.39s]     B | => 1 row(s) affected (sau khi chờ 1.00s)
+[t=  3.39s]     B | UPDATE inventory SET qty_reserved = qty_reserved + 1, version = version + 1 WHERE variant_id = 401 AND location_id = 3 AND (qty_on_hand - qty_reserved) >= 1
+[t=  3.40s]     B | => 1 row(s) affected
+[t=  3.40s]     B | COMMIT
+[t=  3.40s]     B | => 0 row(s) affected
+  [KHỚP ] Không có deadlock: mã lỗi của B: quan sát = [None, None] | kỳ vọng [None, None]
+  [KHỚP ] Giữ chỗ 101 / 401 tại Kho BD: quan sát = [2, 2] | kỳ vọng [2, 2]
+
+  >> Phần 3: lock wait timeout (innodb_lock_wait_timeout = 3 cho phiên B)
+[t=  4.15s]     B | SET SESSION innodb_lock_wait_timeout = 3
+[t=  4.15s]     B | => 0 row(s) affected
+[t=  4.15s] A | START TRANSACTION
+[t=  4.15s] A | => 0 row(s) affected
+[t=  4.15s] A | UPDATE inventory SET qty_reserved = qty_reserved + 1, version = version + 1 WHERE variant_id = 401 AND location_id = 3 AND (qty_on_hand - qty_reserved) >= 1
+[t=  4.15s] A | => 1 row(s) affected
+[t=  4.15s]     B | START TRANSACTION
+[t=  4.15s]     B | => 0 row(s) affected
+[t=  4.15s]     B | UPDATE inventory SET qty_reserved = qty_reserved + 1, version = version + 1 WHERE variant_id = 101 AND location_id = 3 AND (qty_on_hand - qty_reserved) >= 1
+[t=  4.15s]     B | => 1 row(s) affected
+[t=  4.15s]     B | UPDATE inventory SET qty_reserved = qty_reserved + 1, version = version + 1 WHERE variant_id = 401 AND location_id = 3 AND (qty_on_hand - qty_reserved) >= 1 (đang chờ...)
+[t=  7.15s]     B | => ERROR 1205: Lock wait timeout exceeded; try restarting transaction (sau khi chờ 3.00s)
+[t=  7.15s]     B | SELECT qty_reserved FROM inventory WHERE variant_id = 101 AND location_id = 3
+[t=  7.16s]     B | => qty_reserved=1
+[t=  7.16s]     B | COMMIT
+[t=  7.16s]     B | => 0 row(s) affected
+[t=  7.16s] A | COMMIT
+[t=  7.16s] A | => 0 row(s) affected
+  [KHỚP ] Mã lỗi và thời gian chờ (s): quan sát = [1205, 3.0] | kỳ vọng [1205, ≈3]
+  [KHỚP ] Giữ chỗ sofa của B vẫn còn sau lỗi / sau COMMIT: quan sát = [1, 1] | kỳ vọng [1, 1] (chỉ câu lệnh chờ bị hủy: đơn của B được commit dở dang nếu ứng dụng không ROLLBACK)
+
+  => PASS (6/6 kiểm tra khớp, 7.17s)

@@ -1,0 +1,44 @@
+====================================================================================================
+[B5-MG] Hai đơn giữ hai món theo thứ tự ngược nhau; giới hạn thời gian của transaction (MongoDB)
+Giả thuyết: Không có chờ khóa giữa hai transaction: bên ghi sau bị WriteConflict ngay. Lệnh ghi ngoài transaction thì chờ transaction kia kết thúc. Transaction quá transactionLifetimeLimitSeconds bị server hủy.
+
+  >> Phần 1: A giữ 101 rồi 401; B giữ 401 rồi 101 (Kho Bình Dương)
+[t=  0.25s] A | session.startTransaction({ readConcern: "snapshot", writeConcern: { w: "majority" } })
+[t=  0.25s]     B | session.startTransaction({ readConcern: "snapshot", writeConcern: { w: "majority" } })
+[t=  0.25s] A | inventory.updateOne({ _id: "101:3" }, $inc)
+[t=  0.25s] A | => matched 1, modified 1
+[t=  0.25s]     B | inventory.updateOne({ _id: "401:3" }, $inc)
+[t=  0.26s]     B | => matched 1, modified 1
+[t=  0.26s] A | inventory.updateOne({ _id: "401:3" }, $inc)
+[t=  0.26s] A | => ERROR 112 WriteConflict ['TransientTransactionError']
+[t=  0.26s] A | session.abortTransaction()
+[t=  0.26s] A | => abort OK
+[t=  0.26s]     B | inventory.updateOne({ _id: "101:3" }, $inc)
+[t=  0.26s]     B | => matched 1, modified 1
+[t=  0.26s]     B | session.commitTransaction()
+[t=  0.26s]     B | => commit OK
+  [KHỚP ] Mã lỗi của A và thời gian chờ (s): quan sát = [112, 0.001] | kỳ vọng [112, < 0,1]
+  [KHỚP ] Giữ chỗ 101 / 401 tại Kho BD: quan sát = [1, 1] | kỳ vọng [1, 1]
+
+  >> Phần 2: lệnh ghi ngoài transaction gặp document đang bị transaction giữ
+[t=  0.53s] A | session.startTransaction({ readConcern: "snapshot", writeConcern: { w: "majority" } })
+[t=  0.53s] A | inventory.updateOne({ _id: "401:3" }, $inc)
+[t=  0.53s] A | => matched 1, modified 1
+[t=  0.53s]     B | inventory.updateOne({ _id: "401:3" }, $inc)   -- ngoài transaction (đang chờ...)
+[t=  2.03s] A | session.commitTransaction()
+[t=  2.03s] A | => commit OK
+[t=  2.04s]     B | => matched 1, modified 1 (sau khi chờ 1.51s)
+  [KHỚP ] Lệnh ngoài transaction: chờ (s): quan sát = 1.51 | kỳ vọng ≥ 1,4
+  [KHỚP ] Giữ chỗ 401 tại Kho BD: quan sát = 2 | kỳ vọng 2
+
+  >> Phần 3: đặt tạm transactionLifetimeLimitSeconds = 5 rồi để transaction mở 12 giây
+[t=  2.31s] A | session.startTransaction({ readConcern: "snapshot", writeConcern: { w: "majority" } })
+[t=  2.31s] A | inventory.updateOne({ _id: "101:3" }, $inc)
+[t=  2.31s] A | => matched 1, modified 1
+[t=  2.31s] A | (khách chưa xác nhận, transaction để mở 12 giây)
+[t= 14.31s] A | session.commitTransaction()
+[t= 14.32s] A | => ERROR 251 NoSuchTransaction ['TransientTransactionError']
+  [KHỚP ] Mã lỗi khi commit: quan sát = 251 | kỳ vọng 251 (server đã hủy transaction quá hạn)
+  [KHỚP ] Giữ chỗ 101 tại Kho BD: quan sát = 0 | kỳ vọng 0
+
+  => PASS (6/6 kiểm tra khớp, 14.32s)

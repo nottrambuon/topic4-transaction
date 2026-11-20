@@ -1,0 +1,27 @@
+====================================================================================================
+[C3-MY] 8 luồng x 100 đơn cùng mua sofa Lawson 240 tại Kho Bình Dương, tồn đúng 800 (MySQL)
+Giả thuyết: Cập nhật có điều kiện: 800/800, không thử lại, đơn thứ 801 bị từ chối. Version như app: không bán vượt, nhưng nếu không thử lại thì nhiều đơn bị từ chối dù kho còn hàng.
+[t=  2.54s] - | lần 1 | Cập nhật có điều kiện (khóa dòng, giao dịch sau chờ)       |  800 đơn |  432.3 đơn/s | thử lại     0 | từ chối    0 | đơn vượt: OUT_OF_STOCK
+[t=  8.87s] - | lần 1 | Version như app + tự thử lại                               |  800 đơn |  142.5 đơn/s | thử lại  4760 | từ chối    0 | đơn vượt: OUT_OF_STOCK
+[t= 10.34s] - | lần 1 | Version như app, KHÔNG thử lại (đúng hành vi hiện tại)     |  102 đơn |  128.8 đơn/s | thử lại     0 | từ chối  698 | đơn vượt: None
+[t= 17.02s] - | lần 2 | Version như app + tự thử lại                               |  800 đơn |  134.9 đơn/s | thử lại  4729 | từ chối    0 | đơn vượt: OUT_OF_STOCK
+[t= 18.50s] - | lần 2 | Version như app, KHÔNG thử lại (đúng hành vi hiện tại)     |  101 đơn |  123.0 đơn/s | thử lại     0 | từ chối  699 | đơn vượt: None
+[t= 21.23s] - | lần 2 | Cập nhật có điều kiện (khóa dòng, giao dịch sau chờ)       |  800 đơn |  391.2 đơn/s | thử lại     0 | từ chối    0 | đơn vượt: OUT_OF_STOCK
+[t= 22.82s] - | lần 3 | Version như app, KHÔNG thử lại (đúng hành vi hiện tại)     |  102 đơn |  115.0 đơn/s | thử lại     0 | từ chối  698 | đơn vượt: None
+[t= 25.70s] - | lần 3 | Cập nhật có điều kiện (khóa dòng, giao dịch sau chờ)       |  800 đơn |  374.9 đơn/s | thử lại     0 | từ chối    0 | đơn vượt: OUT_OF_STOCK
+[t= 32.46s] - | lần 3 | Version như app + tự thử lại                               |  800 đơn |  132.6 đơn/s | thử lại  5008 | từ chối    0 | đơn vượt: OUT_OF_STOCK
+[t= 35.28s] - | lần 4 | Cập nhật có điều kiện (khóa dòng, giao dịch sau chờ)       |  800 đơn |  375.4 đơn/s | thử lại     0 | từ chối    0 | đơn vượt: OUT_OF_STOCK
+[t= 42.22s] - | lần 4 | Version như app + tự thử lại                               |  800 đơn |  128.8 đơn/s | thử lại  5227 | từ chối    0 | đơn vượt: OUT_OF_STOCK
+[t= 43.74s] - | lần 4 | Version như app, KHÔNG thử lại (đúng hành vi hiện tại)     |  102 đơn |  124.5 đơn/s | thử lại     0 | từ chối  698 | đơn vượt: None
+[t= 50.41s] - | lần 5 | Version như app + tự thử lại                               |  800 đơn |  133.0 đơn/s | thử lại  4884 | từ chối    0 | đơn vượt: OUT_OF_STOCK
+[t= 51.81s] - | lần 5 | Version như app, KHÔNG thử lại (đúng hành vi hiện tại)     |  103 đơn |  146.7 đơn/s | thử lại     0 | từ chối  697 | đơn vượt: None
+[t= 54.40s] - | lần 5 | Cập nhật có điều kiện (khóa dòng, giao dịch sau chờ)       |  800 đơn |  418.1 đơn/s | thử lại     0 | từ chối    0 | đơn vượt: OUT_OF_STOCK
+[t= 54.40s] - | TỔNG HỢP | Cập nhật có điều kiện (khóa dòng, giao dịch sau chờ)       | trung vị 391.2 [374.9; 432.3] đơn/s | thử lại trung vị 0 | từ chối trung vị 0
+[t= 54.40s] - | TỔNG HỢP | Version như app + tự thử lại                               | trung vị 133.0 [128.8; 142.5] đơn/s | thử lại trung vị 4884 | từ chối trung vị 0
+[t= 54.40s] - | TỔNG HỢP | Version như app, KHÔNG thử lại (đúng hành vi hiện tại)     | trung vị 124.5 [115.0; 146.7] đơn/s | thử lại trung vị 0 | từ chối trung vị 698
+  [KHỚP ] Cập nhật có điều kiện: [đơn thành công, thử lại, đơn thứ 801] mọi lần: quan sát = [(800, 0, 'OUT_OF_STOCK')] | kỳ vọng [(800, 0, 'OUT_OF_STOCK')]
+  [KHỚP ] Version + thử lại: đủ 800 đơn và đơn 801 bị từ chối mọi lần: quan sát = True | kỳ vọng True
+  [KHỚP ] Version như app, không thử lại: có đơn bị từ chối dù còn hàng: quan sát = True | kỳ vọng True
+  [KHỚP ] Mọi lần: số đơn = số giữ chỗ (không bán vượt, không mất): quan sát = True | kỳ vọng True
+
+  => PASS (4/4 kiểm tra khớp, 54.4s)

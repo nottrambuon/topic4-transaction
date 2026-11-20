@@ -1,0 +1,26 @@
+====================================================================================================
+[A4-MG] Tạo index / collection giữa giao dịch tăng giá 10% (MongoDB)
+Giả thuyết: createIndex trên collection đã có dữ liệu bị từ chối trong transaction và làm transaction bị hủy; collection tạo mới trong transaction được rollback khi abort.
+
+  >> Phần 1: createIndex trên collection variants (đã có dữ liệu); DDL trong transaction cần readConcern local
+[t=  0.23s] A | session.startTransaction({ readConcern: "local", writeConcern: { w: "majority" } })
+[t=  0.23s] A | variants.updateMany({ _id: { $in: [101, 102] } }, giá x 1,1)
+[t=  0.24s] A | => matched 1, modified 1
+[t=  0.24s] A | variants.createIndex({ sku: 1 })
+[t=  0.24s] A | => ERROR 263 OperationNotSupportedInTransaction
+[t=  0.24s] A | session.commitTransaction()
+[t=  0.24s] A | => ERROR 251 NoSuchTransaction ['TransientTransactionError']
+  [KHỚP ] Mã lỗi createIndex / commit: quan sát = [263, 251] | kỳ vọng [263, 251]
+  [KHỚP ] Giá 101 / 102: quan sát = [480000000, 620000000] | kỳ vọng [480000000, 620000000] (cả giao dịch tăng giá bị hủy)
+
+  >> Phần 2: tạo collection mới trong transaction (readConcern local) rồi abort
+[t=  0.24s] A | session.startTransaction({ readConcern: "local", writeConcern: { w: "majority" } })
+[t=  0.24s] A | db.createCollection("price_audit")
+[t=  0.25s] A | => price_audit
+[t=  0.25s] A | price_audit.insertOne({ note: "tăng giá 10%" })
+[t=  0.25s] A | => inserted 6af20dafe0ce49ccc3116d8f
+[t=  0.25s] A | session.abortTransaction()
+[t=  0.25s] A | => abort OK
+  [KHỚP ] Collection price_audit tồn tại sau abort: quan sát = False | kỳ vọng False
+
+  => PASS (3/3 kiểm tra khớp, 0.25s)

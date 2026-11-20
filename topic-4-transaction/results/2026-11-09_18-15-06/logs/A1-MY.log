@@ -1,0 +1,39 @@
+====================================================================================================
+[A1-MY] Đặt 2 bàn Venice khi Showroom Q1 chỉ còn 1: hủy trọn giao dịch ghi nhiều bảng (MySQL)
+Giả thuyết: ROLLBACK hủy mọi thay đổi của transaction (orders, order_items, inventory); AUTO_INCREMENT không được trả lại.
+
+  >> Phần 1: các câu lệnh của giao dịch Đặt hàng, lệnh giữ chỗ vi phạm CHECK của schema app
+[t=  0.69s] A | START TRANSACTION
+[t=  0.69s] A | => 0 row(s) affected
+[t=  0.69s] A | INSERT INTO orders (customer_id, subtotal, discount, total, shipping_address) VALUES (2, 580000000, 0, 580000000, '5 Tràng Tiền')
+[t=  0.69s] A | => 1 row(s) affected
+[t=  0.69s] A | SET @oid = LAST_INSERT_ID()
+[t=  0.69s] A | => 0 row(s) affected
+[t=  0.69s] A | INSERT INTO order_items (order_id, variant_id, location_id, quantity, unit_price) VALUES (@oid, 401, 1, 2, 290000000)
+[t=  0.69s] A | => 1 row(s) affected
+[t=  0.69s] A | UPDATE inventory SET qty_reserved = qty_reserved + 2, version = version + 1 WHERE variant_id = 401 AND location_id = 1
+[t=  0.69s] A | => ERROR 3819: Check constraint 'chk_inventory_reserved_le_on_hand' is violated.
+  [KHỚP ] Mã lỗi khi giữ chỗ vượt tồn: quan sát = 3819 | kỳ vọng 3819 (CHECK chk_inventory_reserved_le_on_hand)
+[t=  0.69s] A | ROLLBACK
+[t=  0.69s] A | => 0 row(s) affected
+  [KHỚP ] Số đơn / dòng hàng / phiếu thanh toán sau ROLLBACK: quan sát = [1, 1, 1] | kỳ vọng [1, 1, 1] (chỉ còn đơn #1 có sẵn trong dữ liệu mẫu)
+  [KHỚP ] Giữ chỗ 401 @ Showroom Q1: quan sát = 0 | kỳ vọng 0
+  -- Đơn kế tiếp thành công nhận id mấy?
+[t=  0.72s] A | START TRANSACTION
+[t=  0.72s] A | => 0 row(s) affected
+[t=  0.72s] A | INSERT INTO orders (customer_id, subtotal, discount, total, shipping_address) VALUES (2, 290000000, 0, 290000000, '5 Tràng Tiền')
+[t=  0.72s] A | => 1 row(s) affected
+[t=  0.72s] A | SELECT LAST_INSERT_ID() AS id
+[t=  0.72s] A | => id=3
+[t=  0.72s] A | COMMIT
+[t=  0.72s] A | => 0 row(s) affected
+  [KHỚP ] id của đơn kế tiếp: quan sát = 3 | kỳ vọng 3 (số 2 đã cấp cho giao dịch bị hủy không được trả lại)
+
+  >> Phần 2: placeOrder đúng như order.service.ts, đơn 2 dòng: sofa 101 @ Q1 (còn 2) + 2 bàn Venice @ Q1 (còn 1)
+[t=  1.42s] A | placeOrder(customer 3, [{101, Q1, 1}, {401, Q1, 2}]) -> withTransaction(REPEATABLE READ)
+[t=  1.43s] A | => lỗi ứng dụng OUT_OF_STOCK; withTransaction gọi ROLLBACK
+  [KHỚP ] Lỗi ứng dụng: quan sát = OUT_OF_STOCK | kỳ vọng OUT_OF_STOCK (app kiểm tra tồn trước khi UPDATE)
+  [KHỚP ] Giữ chỗ sofa 101 @ Q1 (dòng 1 đã giữ trước khi dòng 2 lỗi): quan sát = 0 | kỳ vọng 0 (ROLLBACK hoàn tác cả lượt giữ chỗ hợp lệ)
+  [KHỚP ] Số đơn / dòng hàng / phiếu thanh toán: quan sát = [1, 1, 1] | kỳ vọng [1, 1, 1]
+
+  => PASS (7/7 kiểm tra khớp, 1.44s)

@@ -1,0 +1,19 @@
+[mysqld]
+# Error log ra file (volume mysql-log), mức chi tiết 3 để thấy các pha redo / undo khi khôi phục (C1)
+log-error                      = /var/log/mysql/error.log
+log_error_verbosity            = 3
+
+# Độ bền đầy đủ như lần đo trong báo cáo (cũng là mặc định của MySQL 8.4).
+# C2 tự đổi innodb_flush_log_at_trx_commit / sync_binlog bằng SET GLOBAL rồi trả lại 1 / 1.
+innodb_flush_log_at_trx_commit = 1
+sync_binlog                    = 1
+log-bin                        = binlog
+server-id                      = 1
+
+transaction_isolation          = REPEATABLE-READ
+innodb_lock_wait_timeout       = 50
+innodb_deadlock_detect         = ON
+
+character-set-server           = utf8mb4
+collation-server               = utf8mb4_unicode_ci
+mysqlx                         = OFF

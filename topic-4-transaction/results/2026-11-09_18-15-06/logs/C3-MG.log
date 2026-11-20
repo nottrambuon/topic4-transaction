@@ -1,0 +1,14 @@
+====================================================================================================
+[C3-MG] 8 luồng x 100 đơn cùng mua sofa Lawson 240 tại Kho Bình Dương, tồn đúng 800 (MongoDB)
+Giả thuyết: withTransaction tự thử lại khi WriteConflict: 800/800 đúng, đơn thứ 801 bị từ chối, nhưng nhiều lần thử lại.
+[t=  9.21s] - | lần 1 | withTransaction, cập nhật có điều kiện |  800 đơn |   90.1 đơn/s | thử lại   977 | đơn vượt: OUT_OF_STOCK
+[t= 19.17s] - | lần 2 | withTransaction, cập nhật có điều kiện |  800 đơn |   82.6 đơn/s | thử lại  1133 | đơn vượt: OUT_OF_STOCK
+[t= 28.71s] - | lần 3 | withTransaction, cập nhật có điều kiện |  800 đơn |   86.3 đơn/s | thử lại  1108 | đơn vượt: OUT_OF_STOCK
+[t= 38.49s] - | lần 4 | withTransaction, cập nhật có điều kiện |  800 đơn |   84.3 đơn/s | thử lại  1198 | đơn vượt: OUT_OF_STOCK
+[t= 48.17s] - | lần 5 | withTransaction, cập nhật có điều kiện |  800 đơn |   85.2 đơn/s | thử lại  1104 | đơn vượt: OUT_OF_STOCK
+[t= 48.17s] - | TỔNG HỢP | trung vị 85.2 [82.6; 90.1] đơn/s | thử lại trung vị 1108 [977; 1198]
+  [KHỚP ] Mọi lần: 800 đơn thành công và đơn 801 bị từ chối: quan sát = True | kỳ vọng True
+  [KHỚP ] Mọi lần có thử lại do WriteConflict: quan sát = True | kỳ vọng True
+  [KHỚP ] Mọi lần: số đơn = số giữ chỗ: quan sát = True | kỳ vọng True
+
+  => PASS (3/3 kiểm tra khớp, 48.17s)

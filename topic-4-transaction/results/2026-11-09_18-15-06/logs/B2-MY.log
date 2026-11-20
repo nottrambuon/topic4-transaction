@@ -1,0 +1,68 @@
+====================================================================================================
+[B2-MY] Báo cáo tồn Kho Bình Dương trong lúc có đổi giá và nhập kho (non-repeatable read, phantom) (MySQL)
+Giả thuyết: READ COMMITTED thấy giá mới và dòng mới giữa hai lần đọc; REPEATABLE READ không thấy; locking read (FOR SHARE) ở REPEATABLE READ luôn đọc bản mới nhất.
+
+  >> Phiên báo cáo A ở mức READ COMMITTED
+[t=  0.63s] A | SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED
+[t=  0.63s] A | => 0 row(s) affected
+[t=  0.64s] A | START TRANSACTION
+[t=  0.64s] A | => 0 row(s) affected
+[t=  0.64s] A | SELECT price FROM product_variants WHERE id = 101
+[t=  0.64s] A | => price=480.000.000
+[t=  0.64s] A | SELECT COUNT(*) AS so_ma, SUM(qty_on_hand) AS tong_ton FROM inventory WHERE location_id = 3
+[t=  0.64s] A | => so_ma=3, tong_ton=13
+[t=  0.64s]     B | UPDATE product_variants SET price = 520000000 WHERE id = 101
+[t=  0.64s]     B | => 1 row(s) affected
+[t=  0.64s]     B | INSERT INTO inventory (variant_id, location_id, qty_on_hand, qty_reserved) VALUES (301, 3, 1, 0)
+[t=  0.64s]     B | => 1 row(s) affected
+[t=  0.64s] A | SELECT price FROM product_variants WHERE id = 101
+[t=  0.64s] A | => price=520.000.000
+[t=  0.64s] A | SELECT COUNT(*) AS so_ma, SUM(qty_on_hand) AS tong_ton FROM inventory WHERE location_id = 3
+[t=  0.64s] A | => so_ma=4, tong_ton=14
+[t=  0.64s] A | COMMIT
+[t=  0.64s] A | => 0 row(s) affected
+
+  >> Phiên báo cáo A ở mức REPEATABLE READ
+[t=  1.30s] A | SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ
+[t=  1.30s] A | => 0 row(s) affected
+[t=  1.31s] A | START TRANSACTION
+[t=  1.31s] A | => 0 row(s) affected
+[t=  1.31s] A | SELECT price FROM product_variants WHERE id = 101
+[t=  1.31s] A | => price=480.000.000
+[t=  1.31s] A | SELECT COUNT(*) AS so_ma, SUM(qty_on_hand) AS tong_ton FROM inventory WHERE location_id = 3
+[t=  1.31s] A | => so_ma=3, tong_ton=13
+[t=  1.31s]     B | UPDATE product_variants SET price = 520000000 WHERE id = 101
+[t=  1.31s]     B | => 1 row(s) affected
+[t=  1.31s]     B | INSERT INTO inventory (variant_id, location_id, qty_on_hand, qty_reserved) VALUES (301, 3, 1, 0)
+[t=  1.31s]     B | => 1 row(s) affected
+[t=  1.31s] A | SELECT price FROM product_variants WHERE id = 101
+[t=  1.31s] A | => price=480.000.000
+[t=  1.31s] A | SELECT COUNT(*) AS so_ma, SUM(qty_on_hand) AS tong_ton FROM inventory WHERE location_id = 3
+[t=  1.31s] A | => so_ma=3, tong_ton=13
+[t=  1.31s] A | COMMIT
+[t=  1.31s] A | => 0 row(s) affected
+
+  >> Phiên báo cáo A ở mức REPEATABLE READ + FOR SHARE
+[t=  2.03s] A | SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ
+[t=  2.03s] A | => 0 row(s) affected
+[t=  2.04s] A | START TRANSACTION
+[t=  2.04s] A | => 0 row(s) affected
+[t=  2.04s] A | SELECT price FROM product_variants WHERE id = 101
+[t=  2.04s] A | => price=480.000.000
+[t=  2.04s] A | SELECT COUNT(*) AS so_ma, SUM(qty_on_hand) AS tong_ton FROM inventory WHERE location_id = 3
+[t=  2.04s] A | => so_ma=3, tong_ton=13
+[t=  2.04s]     B | UPDATE product_variants SET price = 520000000 WHERE id = 101
+[t=  2.04s]     B | => 1 row(s) affected
+[t=  2.04s]     B | INSERT INTO inventory (variant_id, location_id, qty_on_hand, qty_reserved) VALUES (301, 3, 1, 0)
+[t=  2.04s]     B | => 1 row(s) affected
+[t=  2.04s] A | SELECT price FROM product_variants WHERE id = 101
+[t=  2.04s] A | => price=480.000.000
+[t=  2.04s] A | SELECT COUNT(*) AS so_ma, SUM(qty_on_hand) AS tong_ton FROM inventory WHERE location_id = 3 FOR SHARE
+[t=  2.04s] A | => so_ma=4, tong_ton=14
+[t=  2.04s] A | COMMIT
+[t=  2.04s] A | => 0 row(s) affected
+  [KHỚP ] READ COMMITTED [giá lần 1, lần 2 (triệu), (số mã, tổng tồn) lần 1, lần 2]: quan sát = [480, 520, [3, 13], [4, 14]] | kỳ vọng [480, 520, [3, 13], [4, 14]] (non-repeatable read và phantom)
+  [KHỚP ] REPEATABLE READ: quan sát = [480, 480, [3, 13], [3, 13]] | kỳ vọng [480, 480, [3, 13], [3, 13]] (cùng một read view)
+  [KHỚP ] REPEATABLE READ, lần đọc 2 dùng FOR SHARE: quan sát = [480, 480, [3, 13], [4, 14]] | kỳ vọng [480, 480, [3, 13], [4, 14]] (locking read đọc bản mới nhất đã commit)
+
+  => PASS (3/3 kiểm tra khớp, 2.04s)

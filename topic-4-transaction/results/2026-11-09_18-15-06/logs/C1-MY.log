@@ -1,0 +1,52 @@
+====================================================================================================
+[C1-MY] Kill -9 mysqld khi giao dịch Bàn giao đã commit và một đơn khác còn dở dang (MySQL)
+Giả thuyết: Khởi động lại: redo log khôi phục giao dịch đã commit, undo hủy giao dịch chưa commit.
+
+  >> A: giao dịch Bàn giao đơn #1 của An (4 bước như sales.service.ts), COMMIT
+[t=  0.70s] A | START TRANSACTION
+[t=  0.70s] A | => 0 row(s) affected
+[t=  0.70s] A | UPDATE orders SET status = 'delivered' WHERE id = 1 AND sales_user_id = 2
+[t=  0.70s] A | => 1 row(s) affected
+[t=  0.70s] A | UPDATE inventory SET qty_on_hand = GREATEST(0, qty_on_hand - 1), qty_reserved = GREATEST(0, qty_reserved - 1), version = version + 1 WHERE variant_id = 102 AND location_id = 3
+[t=  0.70s] A | => 1 row(s) affected
+[t=  0.70s] A | UPDATE edition_units eu JOIN order_items oi ON eu.order_item_id = oi.id SET eu.status = 'sold' WHERE oi.order_id = 1
+[t=  0.70s] A | => 0 row(s) affected
+[t=  0.70s] A | UPDATE customers SET total_spent = total_spent + 589000000 WHERE id = 1
+[t=  0.71s] A | => 1 row(s) affected
+[t=  0.71s] A | COMMIT
+[t=  0.71s] A | => 0 row(s) affected
+
+  >> B: đơn bàn Venice của Chi, chưa COMMIT
+[t=  0.71s]     B | START TRANSACTION
+[t=  0.71s]     B | => 0 row(s) affected
+[t=  0.71s]     B | UPDATE inventory SET qty_reserved = qty_reserved + 1, version = version + 1 WHERE variant_id = 401 AND location_id = 1 AND (qty_on_hand - qty_reserved) >= 1
+[t=  0.71s]     B | => 1 row(s) affected
+[t=  0.71s]     B | INSERT INTO orders (customer_id, subtotal, discount, total, shipping_address) VALUES (3, 290000000, 0, 290000000, '88 Võ Văn Tần')
+[t=  0.71s]     B | => 1 row(s) affected
+[t=  0.71s]     B | INSERT INTO order_items (order_id, variant_id, location_id, quantity, unit_price) VALUES (LAST_INSERT_ID(), 401, 1, 1, 290000000)
+[t=  0.71s]     B | => 1 row(s) affected
+
+  >> Sự cố
+[t=  0.71s] - | $ kill -9 $(cat /home/claude/srv/mysqld.pid)
+[t=  1.71s] - | $ khởi động lại mysqld
+[t=  3.19s] - | => mysqld nhận kết nối sau 1.5s
+  -- Nhật ký khôi phục (trích error log):
+[t=  4.19s] - | 2026-11-09T18:15:52.286849Z 1 [Note] [MY-013883] [InnoDB] The latest found checkpoint is at lsn = 165530646 in redo log file ./#innodb_redo/#ib_redo50.
+[t=  4.19s] - | 2026-11-09T18:15:52.286893Z 1 [Note] [MY-012560] [InnoDB] The log sequence number 103172704 in the system tablespace does not match the log sequence number 165530646 in the redo log files!
+[t=  4.19s] - | 2026-11-09T18:15:52.286898Z 1 [Note] [MY-012551] [InnoDB] Database was not shutdown normally!
+[t=  4.19s] - | 2026-11-09T18:15:52.286902Z 1 [Note] [MY-012552] [InnoDB] Starting crash recovery.
+[t=  4.19s] - | 2026-11-09T18:15:52.340540Z 1 [Note] [MY-013086] [InnoDB] Starting to parse redo log at lsn = 165530636, whereas checkpoint_lsn = 165530646 and start_lsn = 165530624
+[t=  4.19s] - | 2026-11-09T18:15:52.389010Z 1 [Note] [MY-012532] [InnoDB] Applying a batch of 721 redo log records ...
+[t=  4.19s] - | 2026-11-09T18:15:52.990554Z 1 [Note] [MY-012535] [InnoDB] Apply batch completed!
+[t=  4.19s] - | 2026-11-09T18:15:53.153454Z 1 [Note] [MY-013023] [InnoDB] 1 transaction(s) which must be rolled back or cleaned up in total 3 row operations to undo
+[t=  4.19s] - | 2026-11-09T18:15:53.276014Z 0 [System] [MY-010229] [Server] Starting XA crash recovery...
+[t=  4.19s] - | 2026-11-09T18:15:53.285101Z 0 [System] [MY-010232] [Server] XA crash recovery finished.
+[t=  4.19s] - | 2026-11-09T18:15:53.287441Z 0 [Note] [MY-013011] [InnoDB] Rolling back trx with id 33962, 3 rows to undo
+[t=  4.19s] - | 2026-11-09T18:15:53.291713Z 0 [Note] [MY-013012] [InnoDB] Rollback of trx with id 33962 completed
+[t=  4.19s] - | 2026-11-09T18:15:53.373568Z 0 [System] [MY-010931] [Server] /home/claude/env/my84/bin/mysqld: ready for connections. Version: '8.4.2'  socket: '/home/claude/srv/mysql.sock'  port: 3306  conda-forge.
+  [KHỚP ] Bàn giao đã commit: [trạng thái đơn, tồn / giữ chỗ 102@Kho BD, total_spent của An]: quan sát = ['delivered', [2, 0], 1009000000] | kỳ vọng ['delivered', [2, 0], 1009000000]
+  [KHỚP ] Đơn dở dang của Chi: [số đơn, giữ chỗ 401@Q1]: quan sát = [0, 0] | kỳ vọng [0, 0]
+  [KHỚP ] Log có pha redo (áp dụng redo log): quan sát = True | kỳ vọng True
+  [KHỚP ] Log có pha undo / rollback giao dịch chưa commit: quan sát = True | kỳ vọng True
+
+  => PASS (4/4 kiểm tra khớp, 4.24s)
